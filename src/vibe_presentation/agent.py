@@ -24,7 +24,9 @@ class Agent:
             self.tools_handler.load_presentation,
             self.tools_handler.get_presentation_summary,
             self.tools_handler.open_presentation_folder,
-            self.tools_handler.export_pdf
+            self.tools_handler.export_pdf,
+            self.tools_handler.list_templates,
+            self.tools_handler.preview_template
         ]
 
         # Set up history file path
@@ -66,6 +68,18 @@ class Agent:
         except FileNotFoundError:
             # Fallback or warn if needed, but for now just keep it empty
             pass
+            
+        # Template instructions from metadata
+        template_instructions = ""
+        try:
+            metadata_path = os.path.join(self.presentation_dir, "metadata.json")
+            if os.path.exists(metadata_path):
+                with open(metadata_path, "r") as f:
+                    data = json.load(f)
+                    if "instructions" in data and data["instructions"]:
+                        template_instructions = f"\n## Branding & Template Instructions\n{data['instructions']}\n"
+        except Exception:
+            pass
         
         return f"""
 You are "Presentation Agent", a helpful AI assistant for creating Marp (Markdown) presentations.
@@ -73,7 +87,7 @@ You are "Presentation Agent", a helpful AI assistant for creating Marp (Markdown
 ## Current Presentation Context
 Name: {self.context['name']}
 Description: {self.context.get('description', '')}
-
+{template_instructions}
 {file_context}
 
 ## Your Role

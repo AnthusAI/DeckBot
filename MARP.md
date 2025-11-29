@@ -1,4 +1,4 @@
-# Marp (Markdown Presentation) Cheatsheet
+# Marp (Markdown Presentation) Documentation for LLMs
 
 Marp converts Markdown files into presentation slides. It uses standard Markdown syntax extended with specific directives for slide formatting.
 

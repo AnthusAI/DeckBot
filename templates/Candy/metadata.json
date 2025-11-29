@@ -1,0 +1,10 @@
+{
+  "name": "Candy",
+  "description": "A vibrant template demonstrating background images.",
+  "instructions": "Use the provided background image. Keep the tone fun and energetic.",
+  "image_style": {
+    "prompt": "Create colorful, vibrant images.",
+    "reference_images": ["images/background.png"]
+  }
+}
+

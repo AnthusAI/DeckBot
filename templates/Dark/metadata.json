@@ -1,0 +1,8 @@
+{
+  "name": "Dark",
+  "description": "A clean, simple dark-themed template using Helvetica font.",
+  "instructions": "Use the 'invert' class for all slides. Prefer dark imagery. Keep text concise.",
+  "image_style": {
+    "prompt": "Create images with a clean, minimalist style suitable for dark mode. Use dark backgrounds."
+  }
+}

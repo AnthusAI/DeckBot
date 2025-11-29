@@ -22,7 +22,8 @@ dependencies = [
     "behave",
     "google-generativeai",
     "python-dotenv",
-    "requests"
+    "requests",
+    "Pillow"
 ]
 
 [project.urls]

@@ -73,6 +73,16 @@ You can select an existing deck or create a new one.
     python -m vibe_presentation.cli create my-deck --description "A demo deck"
     ```
 
+*   **Use Templates**:
+    List available templates:
+    ```bash
+    python -m vibe_presentation.cli templates list
+    ```
+    Create from a template:
+    ```bash
+    python -m vibe_presentation.cli create my-startup --template Simple
+    ```
+
 *   **Start the Assistant**:
     ```bash
     python -m vibe_presentation.cli load my-deck

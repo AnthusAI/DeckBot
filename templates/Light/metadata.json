@@ -1,0 +1,8 @@
+{
+  "name": "Light",
+  "description": "A clean, simple light-themed template using Helvetica font.",
+  "instructions": "Maintain a clean, minimal style. Use bullet points frequently. Keep text concise.",
+  "image_style": {
+    "prompt": "Create images with a clean, minimalist flat vector art style. Use a white background where possible."
+  }
+}

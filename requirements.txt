@@ -3,4 +3,5 @@ rich
 behave
 google-generativeai
 python-dotenv
-
+requests
+Pillow

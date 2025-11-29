@@ -23,12 +23,11 @@ htmlcov/
 .idea/
 
 # Vibe Presentation specific
-# Ignore the user's local presentation storage if they use the default location in the repo
-# But we might want to keep 'presentations/' if it contains the demo? 
-# The user said "A clean demo project". 
-# Let's ignore specific user decks if we can, or just ignore the drafts/images generated during runs.
-# For now, standard python ignores + .env is the critical part.
+# Ignore user presentations but keep the folder structure
+presentations/*
+!presentations/.gitkeep
 
-# Generated content
-presentations/**/drafts/
+# Except we might want to allow committing demo decks?
+# For now, ignore all to be safe and clean.
 
+# Ignore local templates if we want? No, templates/ is part of the repo.

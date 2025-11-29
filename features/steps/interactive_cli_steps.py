@@ -39,7 +39,10 @@ def step_impl(context, name):
         # Then Description
         with patch('rich.prompt.Prompt.ask') as mock_prompt:
             # If directory is empty, it asks "Create one? [y/n]" first
-            mock_prompt.side_effect = ["y", name, "Interactive creation"]
+            # Then "Select template" -> "n" (if templates exist)
+            # Then Name
+            # Then Description
+            mock_prompt.side_effect = ["y", "n", name, "Interactive creation"]
             
             context.runner.invoke(cli, args=[], env={'VIBE_PRESENTATION_ROOT': context.temp_dir})
             context.mock_repl = mock_repl

@@ -2,6 +2,8 @@ import os
 import shutil
 import time
 import subprocess
+import json
+import PIL.Image
 import google.generativeai as genai
 from datetime import datetime
 from rich.console import Console
@@ -12,11 +14,14 @@ console = Console()
 class NanoBananaClient:
     def __init__(self, presentation_context):
         self.context = presentation_context
-        # Use local presentations directory if available, otherwise fallback to home
-        if os.path.exists("presentations"):
+        
+        env_root = os.environ.get('VIBE_PRESENTATION_ROOT')
+        if env_root:
+            root = env_root
+        elif os.path.exists("presentations"):
             root = os.path.abspath("presentations")
         else:
-            root = os.environ.get('VIBE_PRESENTATION_ROOT', os.path.expanduser("~/.vibe_presentation"))
+            root = os.path.expanduser("~/.vibe_presentation")
             
         self.presentation_dir = os.path.join(root, presentation_context['name'])
         self.images_dir = os.path.join(self.presentation_dir, "images")
@@ -34,8 +39,51 @@ class NanoBananaClient:
              # Use 'models/nano-banana-pro-preview' as requested
              self.model_name = 'models/nano-banana-pro-preview' 
         
-    def generate_candidates(self, prompt):
+    def generate_candidates(self, prompt, status_spinner=None):
+        if status_spinner:
+            status_spinner.stop() # Pause spinner for logs
+            
         console.print(f"[yellow]Generating 4 candidates for: '{prompt}'...[/yellow]")
+        
+        # Load style from metadata
+        metadata_path = os.path.join(self.presentation_dir, "metadata.json")
+        style_prompt = ""
+        reference_images = []
+        
+        if os.path.exists(metadata_path):
+            try:
+                with open(metadata_path, "r") as f:
+                    data = json.load(f)
+                    style = data.get("image_style", {})
+                    if style.get("prompt"):
+                        style_prompt = style["prompt"]
+                    if style.get("reference_images"):
+                        for ref_name in style["reference_images"]:
+                            # Check presentation root then images dir
+                            ref_path = os.path.join(self.presentation_dir, ref_name)
+                            if not os.path.exists(ref_path):
+                                ref_path = os.path.join(self.images_dir, ref_name)
+                            
+                            if os.path.exists(ref_path):
+                                try:
+                                    img = PIL.Image.open(ref_path)
+                                    reference_images.append(img)
+                                    console.print(f"[dim]Using reference image: {ref_name}[/dim]")
+                                except Exception as e:
+                                    console.print(f"[red]Error loading reference image {ref_name}: {e}[/red]")
+            except Exception:
+                pass
+
+        final_prompt = prompt
+        if style_prompt:
+            final_prompt = f"{prompt}. Style instructions: {style_prompt}"
+            
+        generation_input = [final_prompt]
+        generation_input.extend(reference_images)
+        
+        if status_spinner:
+            status_spinner.start() # Resume
+
         candidates = []
         
         # Create isolated folder for this request
@@ -57,7 +105,7 @@ class NanoBananaClient:
             console.print(f"  Generating candidate {i+1}/4...")
             try:
                 # Gemini 2.0 Flash Exp supports generating images via text prompt
-                response = model.generate_content(prompt)
+                response = model.generate_content(generation_input)
                 
                 image_saved = False
                 if response.parts:

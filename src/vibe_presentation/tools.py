@@ -39,13 +39,44 @@ class PresentationTools:
             result.append("")
         return "\n".join(result)
 
-    def create_presentation(self, name: str, description: str = ""):
+    def list_templates(self):
+        """Lists all available templates."""
+        templates = self.manager.list_templates()
+        if not templates:
+            return "No templates found."
+        result = []
+        for t in templates:
+            result.append(f"- {t['name']}: {t['description']}")
+        return "\n".join(result)
+
+    def create_presentation(self, name: str, description: str = "", template: str = None):
         """Creates a new presentation."""
         try:
-            metadata = self.manager.create_presentation(name, description)
+            self.manager.create_presentation(name, description, template=template)
             return f"Successfully created presentation '{name}'"
         except ValueError as e:
             return f"Error creating presentation: {str(e)}"
+
+    def preview_template(self, template_name: str):
+        """Previews a template by compiling it to HTML and opening it."""
+        template_path = os.path.join(self.manager.templates_dir, template_name)
+        if not os.path.exists(template_path):
+            return f"Template '{template_name}' not found."
+        
+        console.print(f"[green]Previewing template '{template_name}'...[/green]")
+        try:
+            # Reuse standard Marp build
+            subprocess.run(["npx", "@marp-team/marp-cli", "deck.marp.md", "--allow-local-files"], cwd=template_path, check=True)
+            
+            html_file = os.path.join(template_path, "deck.marp.html")
+            if os.path.exists(html_file):
+                if os.name == 'posix':
+                     subprocess.run(["open", html_file])
+                elif os.name == 'nt':
+                     os.startfile(html_file)
+            return f"Previewing template '{template_name}'."
+        except Exception as e:
+            return f"Error previewing template: {str(e)}"
 
     def load_presentation(self, name: str):
         """Loads a presentation context."""

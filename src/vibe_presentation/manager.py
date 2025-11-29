@@ -19,27 +19,70 @@ class PresentationManager:
         
         if not os.path.exists(self.root_dir):
             os.makedirs(self.root_dir)
+        
+        # Templates directory
+        # 1. Check inside root_dir (useful for tests or self-contained storage)
+        internal_templates = os.path.join(self.root_dir, "templates")
+        if os.path.exists(internal_templates):
+             self.templates_dir = internal_templates
+        else:
+             # 2. Check local templates folder (useful for repo usage)
+             local_templates = os.path.abspath("templates")
+             if os.path.exists(local_templates):
+                 self.templates_dir = local_templates
+             else:
+                 # Default back to internal
+                 self.templates_dir = internal_templates
 
-    def create_presentation(self, name, description=""):
+    def create_presentation(self, name, description="", template=None):
         presentation_dir = os.path.join(self.root_dir, name)
         if os.path.exists(presentation_dir):
             raise ValueError(f"Presentation '{name}' already exists.")
         
-        os.makedirs(presentation_dir)
-        
-        metadata = {
-            "name": name,
-            "description": description,
-            "created_at": datetime.now().isoformat(),
-            "updated_at": datetime.now().isoformat()
-        }
-        
-        with open(os.path.join(presentation_dir, "metadata.json"), "w") as f:
-            json.dump(metadata, f, indent=2)
+        if template:
+            # Create from template
+            template_path = os.path.join(self.templates_dir, template)
+            if not os.path.exists(template_path):
+                raise ValueError(f"Template '{template}' not found.")
             
-        # Create a default Marp deck
-        with open(os.path.join(presentation_dir, "deck.marp.md"), "w") as f:
-            f.write(f"""---
+            import shutil
+            shutil.copytree(template_path, presentation_dir)
+            
+            # Update metadata
+            metadata_path = os.path.join(presentation_dir, "metadata.json")
+            metadata = {}
+            if os.path.exists(metadata_path):
+                with open(metadata_path, "r") as f:
+                    metadata = json.load(f)
+            
+            metadata.update({
+                "name": name,
+                "description": description,
+                "created_at": datetime.now().isoformat(),
+                "updated_at": datetime.now().isoformat()
+            })
+            
+            with open(metadata_path, "w") as f:
+                json.dump(metadata, f, indent=2)
+                
+            return metadata
+        else:
+            # Create default
+            os.makedirs(presentation_dir)
+            
+            metadata = {
+                "name": name,
+                "description": description,
+                "created_at": datetime.now().isoformat(),
+                "updated_at": datetime.now().isoformat()
+            }
+            
+            with open(os.path.join(presentation_dir, "metadata.json"), "w") as f:
+                json.dump(metadata, f, indent=2)
+                
+            # Create a default Marp deck
+            with open(os.path.join(presentation_dir, "deck.marp.md"), "w") as f:
+                f.write(f"""---
 marp: true
 theme: default
 paginate: true
@@ -56,8 +99,27 @@ paginate: true
 - Bullet 1
 - Bullet 2
 """)
-        
-        return metadata
+            
+            return metadata
+
+    def list_templates(self):
+        templates = []
+        if not os.path.exists(self.templates_dir):
+            return []
+            
+        for name in os.listdir(self.templates_dir):
+            path = os.path.join(self.templates_dir, name)
+            if os.path.isdir(path):
+                metadata_path = os.path.join(path, "metadata.json")
+                desc = ""
+                if os.path.exists(metadata_path):
+                    try:
+                        with open(metadata_path, "r") as f:
+                            data = json.load(f)
+                            desc = data.get('description', '')
+                    except: pass
+                templates.append({"name": name, "description": desc})
+        return templates
 
     def list_presentations(self):
         presentations = []
