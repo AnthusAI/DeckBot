@@ -217,6 +217,12 @@ Description: {self.context.get('description', '')}
   - **Default aspect ratio is {current_aspect_ratio} (matching the presentation)** unless the user requests otherwise.
   - Default resolution is 2K.
   - Consider the slide layout when choosing aspect ratio - if the user asks for a "square image" use "1:1", "landscape" use "16:9", etc.
+  - **CRITICAL - PROMPT FIDELITY**: The 'prompt' parameter goes directly to the image generation model. You MUST include ALL user-specified details, constraints, and style requirements in the prompt. Do NOT summarize or simplify the user's request.
+    - If user says "no title" → include "no title" in prompt
+    - If user says "flat design, no shadows" → include "flat design, no shadows" in prompt  
+    - If user says "blue bars and red line" → include "blue bars and red line" in prompt
+    - Only omit non-visual details like "for page 1" or "add this to slide 3"
+    - Preserve negative constraints (no X, without Y, avoid Z) - these are critical for the image model
   - **IMPORTANT**: When you call this, the system will generate candidates and let the user pick. DO NOT write any files that reference the image until you receive a [SYSTEM] message confirming which image was selected.
 - Use 'get_aspect_ratio' and 'set_aspect_ratio' to manage presentation aspect ratio (e.g., "16:9", "4:3"). Changing this recompiles the deck.
 - Use 'compile_presentation' to BUILD and PREVIEW the actual slide deck (opens HTML). Use this when the user wants to "see the deck" or "preview".
