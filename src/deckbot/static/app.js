@@ -13,6 +13,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Menu items
     const menuNew = document.getElementById('menu-new');
     const menuOpen = document.getElementById('menu-open');
+    const menuClose = document.getElementById('menu-close');
     const menuExport = document.getElementById('menu-export');
     const menuPresSettings = document.getElementById('menu-pres-settings');
     const menuSaveAs = document.getElementById('menu-save-as');
@@ -282,6 +283,31 @@ document.addEventListener('DOMContentLoaded', () => {
         presentationCreate.classList.add('hidden');
         loadPresentationList();
     });
+
+    if (menuClose) {
+        menuClose.addEventListener('click', () => {
+            if (!confirm('Are you sure you want to close the current presentation?')) {
+                return;
+            }
+            
+            // Close via API
+            fetch('/api/state/current-presentation', {
+                method: 'DELETE'
+            })
+            .then(r => r.json())
+            .then(data => {
+                // Reset UI state
+                currentPresName = "";
+                chatHistory.innerHTML = '';
+                previewFrame.src = '';
+                presentationSelect.classList.remove('hidden');
+                loadPresentationList();
+            })
+            .catch(err => {
+                console.error('Error closing presentation:', err);
+            });
+        });
+    }
     
     if (menuAbout) {
         menuAbout.addEventListener('click', () => {
@@ -853,13 +879,40 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // ===== Initial Load =====
-    // Show presentation selector on initial load
-    if (presentationSelect) {
-        presentationSelect.classList.remove('hidden');
-    }
-    if (presentationCreate) {
-        presentationCreate.classList.add('hidden');
-    }
+    
+    // Check for persisted state first
+    fetch('/api/state/current-presentation')
+        .then(r => r.json())
+        .then(state => {
+            if (state.name) {
+                // Auto-restore presentation
+                console.log('Restoring session for:', state.name);
+                loadPresentation(state.name);
+                
+                // Ensure correct view
+                if (presentationSelect) {
+                    presentationSelect.classList.add('hidden');
+                }
+                if (presentationCreate) {
+                    presentationCreate.classList.add('hidden');
+                }
+            } else {
+                // No state, show selector
+                if (presentationSelect) {
+                    presentationSelect.classList.remove('hidden');
+                }
+                if (presentationCreate) {
+                    presentationCreate.classList.add('hidden');
+                }
+            }
+        })
+        .catch(err => {
+            console.error('Error checking state:', err);
+            // Fallback to selector
+            if (presentationSelect) {
+                presentationSelect.classList.remove('hidden');
+            }
+        });
     
     loadPresentationList();
     

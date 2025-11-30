@@ -6,6 +6,7 @@ from flask import Flask, render_template, request, jsonify, Response, stream_wit
 from deckbot.manager import PresentationManager
 from deckbot.session_service import SessionService
 from deckbot.preferences import PreferencesManager
+from deckbot.state import StateManager
 
 app = Flask(__name__)
 
@@ -116,6 +117,13 @@ def delete_presentation():
     manager = PresentationManager()
     try:
         manager.delete_presentation(name)
+        
+        # Clear state if we deleted the current presentation
+        state_manager = StateManager()
+        current = state_manager.get_current_presentation()
+        if current == name:
+            state_manager.clear_current_presentation()
+            
         return jsonify({"message": "Deleted", "name": name})
     except FileNotFoundError:
         return jsonify({"error": "Presentation not found"}), 404
@@ -165,6 +173,32 @@ def set_preference(key):
     prefs.set(key, data['value'])
     return jsonify({"message": "Preference updated", "key": key, "value": data['value']})
 
+@app.route('/api/state/current-presentation', methods=['GET'])
+def get_current_presentation_state():
+    """Get the persisted current presentation name."""
+    state_manager = StateManager()
+    current_pres = state_manager.get_current_presentation()
+    if not current_pres:
+        return jsonify({"name": None})
+        
+    # Verify it still exists
+    manager = PresentationManager()
+    if not manager.get_presentation(current_pres):
+        # Clean up if it was deleted outside of this session
+        state_manager.clear_current_presentation()
+        return jsonify({"name": None})
+        
+    return jsonify({"name": current_pres})
+
+@app.route('/api/state/current-presentation', methods=['DELETE'])
+def clear_current_presentation_state():
+    """Clear the persisted current presentation state and unload service."""
+    global current_service
+    state_manager = StateManager()
+    state_manager.clear_current_presentation()
+    current_service = None
+    return jsonify({"message": "State cleared"})
+
 @app.route('/api/load', methods=['POST'])
 def load_presentation():
     global current_service
@@ -177,6 +211,10 @@ def load_presentation():
         return jsonify({"error": "Presentation not found"}), 404
         
     current_service = SessionService(presentation)
+    
+    # Persist state
+    state_manager = StateManager()
+    state_manager.set_current_presentation(name)
     
     # Return history
     history = current_service.get_history()
