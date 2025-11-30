@@ -111,19 +111,35 @@ All features are documented in the `features/` directory using Gherkin syntax. R
 
 ## Usage
 
-### Interactive Mode (Recommended)
-Simply run the CLI without arguments to start the interactive launcher:
+### Web UI (Default, Recommended)
+Simply run the CLI to launch the web UI with color themes, visual image selection, and live preview:
+
 ```bash
 deckbot
 ```
-You can select an existing deck or create a new one.
+
+Then open `http://localhost:5555` in your browser to select an existing deck or create a new one.
+
+**Custom Port:**
+```bash
+deckbot --port 8080
+```
+
+### Text Mode (Interactive CLI)
+Prefer a terminal-based interface? Use the `--text` flag to start the interactive text launcher:
+
+```bash
+deckbot --text
+```
+
+You can select an existing deck or create a new one from the terminal prompt.
+
+**Resume Session**: Pick up exactly where you left off in text mode:
+```bash
+deckbot --text --continue
+```
 
 ### Commands
-
-*   **Resume Session**: Pick up exactly where you left off.
-    ```bash
-    deckbot --continue
-    ```
 
 *   **Create a Deck**:
     ```bash
@@ -140,7 +156,7 @@ You can select an existing deck or create a new one.
     deckbot create my-startup --template Simple
     ```
 
-*   **Start the Assistant**:
+*   **Start the Assistant (Text Mode)**:
     ```bash
     deckbot load my-deck
     ```
@@ -150,18 +166,12 @@ You can select an existing deck or create a new one.
     deckbot preview my-deck
     ```
 
-### In the Assistant (REPL)
+### In the Assistant (Text REPL)
+
+When using text mode (`deckbot --text` or `deckbot load my-deck`):
 
 *   **Chat**: "Add a slide about our Q3 goals."
 *   **Generate Images**: "Generate a futuristic cityscape image for the title slide." (or use `/image <prompt>`)
 *   **Show Work**: "Show me the deck" (prints a summary).
 *   **Preview**: "Preview the presentation" (opens the HTML preview).
 *   **Export**: "Export to PDF" (saves a PDF version).
-
-### Web Mode
-Prefer a visual interface? Launch the web UI with color themes, visual image selection, and live preview.
-
-```bash
-deckbot --web
-```
-Then open `http://localhost:5555` in your browser.

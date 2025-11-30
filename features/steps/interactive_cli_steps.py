@@ -5,7 +5,7 @@ from deckbot.cli import cli
 from deckbot.manager import PresentationManager
 import os
 
-@when('I run the CLI without arguments and select "{selection}"')
+@when('I run the CLI with --text flag and select "{selection}"')
 def step_impl(context, selection):
     manager = PresentationManager(root_dir=context.temp_dir)
     presentations = manager.list_presentations()
@@ -28,10 +28,10 @@ def step_impl(context, selection):
         
         # Let's assume we patch Prompt.ask for now as it handles strings like "n".
         with patch('rich.prompt.Prompt.ask', return_value=user_input):
-             context.runner.invoke(cli, args=[], env={'VIBE_PRESENTATION_ROOT': context.temp_dir})
+             context.runner.invoke(cli, args=['--text'], env={'VIBE_PRESENTATION_ROOT': context.temp_dir})
              context.mock_repl = mock_repl
 
-@when('I run the CLI without arguments and choose to create "{name}"')
+@when('I run the CLI with --text flag and choose to create "{name}"')
 def step_impl(context, name):
     with patch('deckbot.cli.start_repl') as mock_repl:
         # We expect Prompt.ask for "No presentations found. Create one?" -> "y"
@@ -44,6 +44,6 @@ def step_impl(context, name):
             # Then Description
             mock_prompt.side_effect = ["y", "n", name, "Interactive creation"]
             
-            context.runner.invoke(cli, args=[], env={'VIBE_PRESENTATION_ROOT': context.temp_dir})
+            context.runner.invoke(cli, args=['--text'], env={'VIBE_PRESENTATION_ROOT': context.temp_dir})
             context.mock_repl = mock_repl
 

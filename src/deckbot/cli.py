@@ -37,12 +37,66 @@ def _interactive_create(ctx, manager):
 
 @click.group(invoke_without_command=True)
 @click.option('--continue', 'resume', is_flag=True, help='Resume the most recently edited presentation')
-@click.option('--web', '-w', is_flag=True, help='Start the web UI server')
-@click.option('--port', default=5555, help='Port for web server (only used with --web)')
+@click.option('--text', '-t', is_flag=True, help='Start in text/REPL mode instead of web UI')
+@click.option('--web', '-w', is_flag=True, help='Start the web UI server (default behavior, kept for backward compatibility)')
+@click.option('--port', default=5555, help='Port for web server')
 @click.pass_context
-def cli(ctx, resume, web, port):
+def cli(ctx, resume, text, web, port):
     """Vibe-Coded Presentation CLI"""
-    if web:
+    # Text mode: interactive REPL/presentation selection
+    if text:
+        if ctx.invoked_subcommand is None:
+            # If resume flag is set, find most recent and load it
+            manager = PresentationManager()
+            if resume:
+                presentations = manager.list_presentations()
+                # list_presentations returns sorted by reverse chronological order (created_at)
+                # If we want most recently *edited*, file system check is better, but created_at sort is a good proxy for "last active" usually
+                # unless metadata isn't updated.
+                # Let's trust the order returned by manager.list_presentations() as it is sorted.
+                if presentations:
+                    latest = presentations[0]
+                    # Invoke load command directly
+                    ctx.invoke(load, name=latest['name'], resume=True)
+                    return
+                else:
+                    console.print("[red]No presentations found to resume.[/red]")
+                    return
+
+            # Interactive mode if no command provided
+            # Imports moved to top
+            manager = PresentationManager()
+            presentations = manager.list_presentations()
+            
+            if not presentations:
+                if Prompt.ask("No presentations found. Create one?", choices=["y", "n"], default="y") == "y":
+                    _interactive_create(ctx, manager)
+                return
+
+            console.print("[bold]Select a presentation to load:[/bold]")
+            for i, p in enumerate(presentations):
+                console.print(f"{i+1}. [cyan]{p['name']}[/cyan]: {p.get('description', '')}")
+            
+            console.print("n. [italic]Create new presentation[/italic]")
+            
+            choice = Prompt.ask("Choice", default="1")
+            
+            if choice.lower() == 'n':
+                _interactive_create(ctx, manager)
+            else:
+                try:
+                    idx = int(choice) - 1
+                    if 0 <= idx < len(presentations):
+                        name = presentations[idx]['name']
+                        ctx.invoke(load, name=name)
+                    else:
+                        console.print("[red]Invalid selection.[/red]")
+                except ValueError:
+                    console.print("[red]Invalid input.[/red]")
+        return
+
+    # Default behavior (no --text flag): Launch web UI
+    if ctx.invoked_subcommand is None:
         try:
             from deckbot.webapp import app
             console.print(f"[green]Starting Web UI on http://localhost:{port}[/green]")
@@ -52,55 +106,6 @@ def cli(ctx, resume, web, port):
         except Exception as e:
             console.print(f"[red]Error starting web server: {e}[/red]")
         return
-
-    if ctx.invoked_subcommand is None:
-        # If resume flag is set, find most recent and load it
-        manager = PresentationManager()
-        if resume:
-            presentations = manager.list_presentations()
-            # list_presentations returns sorted by reverse chronological order (created_at)
-            # If we want most recently *edited*, file system check is better, but created_at sort is a good proxy for "last active" usually
-            # unless metadata isn't updated.
-            # Let's trust the order returned by manager.list_presentations() as it is sorted.
-            if presentations:
-                latest = presentations[0]
-                # Invoke load command directly
-                ctx.invoke(load, name=latest['name'], resume=True)
-                return
-            else:
-                console.print("[red]No presentations found to resume.[/red]")
-                return
-
-        # Interactive mode if no command provided
-        # Imports moved to top
-        manager = PresentationManager()
-        presentations = manager.list_presentations()
-        
-        if not presentations:
-            if Prompt.ask("No presentations found. Create one?", choices=["y", "n"], default="y") == "y":
-                _interactive_create(ctx, manager)
-            return
-
-        console.print("[bold]Select a presentation to load:[/bold]")
-        for i, p in enumerate(presentations):
-            console.print(f"{i+1}. [cyan]{p['name']}[/cyan]: {p.get('description', '')}")
-        
-        console.print("n. [italic]Create new presentation[/italic]")
-        
-        choice = Prompt.ask("Choice", default="1")
-        
-        if choice.lower() == 'n':
-            _interactive_create(ctx, manager)
-        else:
-            try:
-                idx = int(choice) - 1
-                if 0 <= idx < len(presentations):
-                    name = presentations[idx]['name']
-                    ctx.invoke(load, name=name)
-                else:
-                    console.print("[red]Invalid selection.[/red]")
-            except ValueError:
-                console.print("[red]Invalid input.[/red]")
 
 @cli.command()
 @click.argument('name')

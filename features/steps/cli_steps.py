@@ -42,10 +42,35 @@ def step_impl(context, name, description):
 def step_impl(context):
     context.flask_missing = True
 
+@when('I run the command ""')
+def step_impl_empty_command(context):
+    # Handle empty command case (default web mode)
+    args = []
+    env = {'VIBE_PRESENTATION_ROOT': context.temp_dir}
+    
+    if getattr(context, 'flask_missing', False):
+        # Simulate Flask missing
+        with patch.dict(sys.modules, {'deckbot.webapp': None}):
+             context.result = context.runner.invoke(cli, args, env=env)
+    else:
+        # Empty command defaults to web mode, so mock the app
+        with patch('deckbot.webapp.app') as mock_app:
+            context.mock_app = mock_app
+            context.result = context.runner.invoke(cli, args, env=env)
+
 @when('I run the command "{command}"')
 def step_impl(context, command):
-    args = shlex.split(command)
+    args = shlex.split(command) if command else []
     env = {'VIBE_PRESENTATION_ROOT': context.temp_dir}
+    
+    # Determine if this should use web mode (which needs mocking)
+    # Web mode is triggered by: empty command, --web, -w, --port (without --text)
+    is_web_mode = (
+        (not command or command == '') or  # Empty command defaults to web
+        '--web' in command or 
+        '-w' in command or 
+        ('--port' in command and '--text' not in command)
+    ) and '--text' not in command
     
     if getattr(context, 'flask_missing', False):
         # Simulate Flask missing by ensuring import fails
@@ -54,9 +79,9 @@ def step_impl(context, command):
         # Setting to None typically causes ImportError/ModuleNotFoundError
         with patch.dict(sys.modules, {'deckbot.webapp': None}):
              context.result = context.runner.invoke(cli, args, env=env)
-    elif '--web' in command or '-w' in command:
+    elif is_web_mode:
         # Mock the app.run call to prevent server from actually starting/blocking
-        # We mock the module that is imported
+        # Now web mode is default, so mock unless --text is present
         with patch('deckbot.webapp.app') as mock_app:
             context.mock_app = mock_app
             context.result = context.runner.invoke(cli, args, env=env)

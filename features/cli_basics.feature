@@ -19,17 +19,22 @@ Feature: CLI Core and Presentation Management
     And the output should contain "deck-2"
     And the output should contain "Second deck"
 
-  Scenario: Start Web UI with Default Port
-    When I run the command "--web"
+  Scenario: Start Web UI with Default Port (Default Behavior)
+    When I run the command ""
     Then the web server should start on port 5555
     And the output should contain "Starting Web UI on http://localhost:5555"
 
   Scenario: Start Web UI with Custom Port
-    When I run the command "--web --port 8080"
+    When I run the command "--port 8080"
     Then the web server should start on port 8080
     And the output should contain "Starting Web UI on http://localhost:8080"
 
   Scenario: Start Web UI - Flask Missing
     Given Flask is not installed
-    When I run the command "--web"
+    When I run the command ""
     Then the output should contain "Error: Flask not installed"
+
+  Scenario: Start Web UI with --web Flag (Backward Compatibility)
+    When I run the command "--web"
+    Then the web server should start on port 5555
+    And the output should contain "Starting Web UI on http://localhost:5555"
