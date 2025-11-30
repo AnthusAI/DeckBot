@@ -25,4 +25,24 @@ Feature: File Management Tools
     When the agent tries copy_file("slide.md", "../../../etc/passwd")
     Then the operation should fail
     And an error should be returned
+  
+  Scenario: Agent lists files in root directory
+    Given I have a file "slide1.md"
+    And I have a file "slide2.md"
+    When the agent calls list_files()
+    Then the file list result should contain "slide1.md"
+    And the file list result should contain "slide2.md"
+  
+  Scenario: Agent lists files in subdirectory
+    Given I have a subdirectory "images"
+    And I have a file "images/logo.png"
+    And I have a file "images/background.jpg"
+    When the agent calls list_files("images")
+    Then the file list result should contain "logo.png"
+    And the file list result should contain "background.jpg"
+  
+  Scenario: Agent lists empty subdirectory
+    Given I have a subdirectory "drafts"
+    When the agent calls list_files("drafts")
+    Then the file list result should contain "empty"
 

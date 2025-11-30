@@ -11,6 +11,8 @@ def step_impl(context, filename, content):
         os.makedirs(context.presentation_dir, exist_ok=True)
         
     file_path = os.path.join(context.presentation_dir, filename)
+    # Create parent directories if filename contains subdirectory
+    os.makedirs(os.path.dirname(file_path), exist_ok=True)
     with open(file_path, "w") as f:
         f.write(content)
         
@@ -80,4 +82,36 @@ def step_impl(context):
 @then('an error should be returned')
 def step_impl(context):
     assert hasattr(context, 'last_error') or "Error" in context.last_result
+
+@given('I have a subdirectory "{dirname}"')
+def step_impl(context, dirname):
+    # Ensure presentation dir exists
+    if not hasattr(context, 'presentation_dir'):
+        context.presentation_dir = os.path.join(context.temp_dir, "test-deck")
+        os.makedirs(context.presentation_dir, exist_ok=True)
+    
+    dir_path = os.path.join(context.presentation_dir, dirname)
+    os.makedirs(dir_path, exist_ok=True)
+    
+    # Initialize tools if not already
+    if not hasattr(context, 'tools'):
+        context.tools = PresentationTools({'name': 'test-deck'}, MagicMock())
+
+@when('the agent calls list_files()')
+def step_impl(context):
+    try:
+        context.last_result = context.tools.list_files()
+    except Exception as e:
+        context.last_error = str(e)
+
+@when('the agent calls list_files("{subdirectory}")')
+def step_impl(context, subdirectory):
+    try:
+        context.last_result = context.tools.list_files(subdirectory)
+    except Exception as e:
+        context.last_error = str(e)
+
+@then('the file list result should contain "{text}"')
+def step_impl(context, text):
+    assert text in context.last_result, f"Expected '{text}' in result, got: {context.last_result}"
 

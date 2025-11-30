@@ -153,7 +153,7 @@ When the user asks for an image:
                 self.chat_session = self.model.start_chat(history=self.history, enable_automatic_function_calling=True)
                 return
             except Exception as e:
-                # print(f"Failed to init {model_name}: {e}") # Debugging
+                # Silently continue trying other models
                 continue
         import sys
         # Only print error if not in test mode

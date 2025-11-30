@@ -1,6 +1,7 @@
 import os
 import subprocess
 import shutil
+from functools import wraps
 from rich.console import Console
 from rich.prompt import IntPrompt
 from deckbot.nano_banana import NanoBananaClient
@@ -35,6 +36,7 @@ class PresentationTools:
 
     def _wrap_tool(self, tool_name, func):
         """Wrapper that notifies before/after tool execution."""
+        @wraps(func)
         def wrapped(*args, **kwargs):
             if self.on_tool_call:
                 # Mask args for some tools if needed, but generally fine
@@ -111,12 +113,36 @@ class PresentationTools:
             return f"Error: Presentation '{name}' not found."
         return presentation
 
-    def list_files(self, **kwargs):
-        """List files in the current presentation directory."""
+    def list_files(self, subdirectory: str = ""):
+        """
+        List files in the current presentation directory or a subdirectory.
+        
+        Args:
+            subdirectory: Optional subdirectory path relative to presentation root (e.g., "images", "drafts")
+        """
         if not os.path.exists(self.presentation_dir):
             return "Presentation directory does not exist."
-        files = os.listdir(self.presentation_dir)
-        return "\n".join(files)
+        
+        # Build the target directory path
+        if subdirectory:
+            target_dir = os.path.abspath(os.path.join(self.presentation_dir, subdirectory))
+            # Security check: ensure we stay within presentation directory
+            if not target_dir.startswith(os.path.abspath(self.presentation_dir)):
+                return "Error: Path outside presentation directory."
+        else:
+            target_dir = self.presentation_dir
+        
+        if not os.path.exists(target_dir):
+            return f"Error: Directory '{subdirectory or '.'}' not found."
+        
+        if not os.path.isdir(target_dir):
+            return f"Error: '{subdirectory}' is not a directory."
+        
+        files = os.listdir(target_dir)
+        if not files:
+            return f"Directory '{subdirectory or '.'}' is empty."
+        
+        return "\n".join(sorted(files))
 
     def read_file(self, filename: str):
         """Read content of a file in the presentation directory."""

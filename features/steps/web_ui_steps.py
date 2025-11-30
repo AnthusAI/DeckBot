@@ -432,12 +432,9 @@ def step_impl(context):
 @given('a template "{name}" exists with a background image')
 def step_impl(context, name):
     context.template_has_image = True
-    # Create the template in the temp environment's templates directory
-    # The temp_dir is set by the temporary_environment fixture
-    # Templates are typically in a sibling directory to presentations
-    import tempfile
-    temp_parent = os.path.dirname(context.temp_dir)
-    templates_dir = os.path.join(temp_parent, "templates")
+    # Create the template in the temp_dir/templates directory
+    # PresentationManager looks in root_dir/templates first
+    templates_dir = os.path.join(context.temp_dir, "templates")
     os.makedirs(templates_dir, exist_ok=True)
     template_dir = os.path.join(templates_dir, name)
     os.makedirs(template_dir, exist_ok=True)

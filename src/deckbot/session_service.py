@@ -53,6 +53,13 @@ class SessionService:
             response = self.agent.chat(user_input, status_spinner=status_spinner)
             self._notify("message", {"role": "model", "content": response})
             return response
+        except Exception as e:
+            error_msg = f"Error: {str(e)}"
+            print(f"Agent error: {type(e).__name__}: {e}")
+            import traceback
+            traceback.print_exc()
+            self._notify("message", {"role": "model", "content": error_msg})
+            return error_msg
         finally:
             self._notify("thinking_end")
 
@@ -72,6 +79,7 @@ class SessionService:
         
         # Generate images in the background and notify via SSE
         import threading
+        import traceback
         def _generate():
             self.last_image_prompt = prompt
             
@@ -85,15 +93,21 @@ class SessionService:
                 })
             
             try:
+                print(f"[IMAGE GEN] Starting generation for prompt: {prompt[:50]}...")
                 # Deterministic: Always generate 4 candidates
                 candidates = self.nano_client.generate_candidates(prompt, status_spinner=None, progress_callback=progress)
+                print(f"[IMAGE GEN] Generated {len(candidates)} candidates")
                 self.pending_candidates = candidates
                 # Final notification with all candidates
                 self._notify("images_ready", {"candidates": candidates, "prompt": prompt})
+                print(f"[IMAGE GEN] Notified images_ready")
             except Exception as e:
-                self._notify("error", {"message": str(e)})
+                print(f"[IMAGE GEN ERROR] {type(e).__name__}: {e}")
+                traceback.print_exc()
+                self._notify("message", {"role": "system", "content": f"Error generating images: {str(e)}"})
         
         # Run in thread to avoid blocking the agent response
+        print(f"[IMAGE GEN] Starting thread for image generation")
         threading.Thread(target=_generate, daemon=True).start()
 
     def generate_images(self, prompt: str, status_spinner=None) -> List[str]:

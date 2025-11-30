@@ -631,6 +631,8 @@ document.addEventListener('DOMContentLoaded', () => {
     
     evtSource.addEventListener("thinking_start", () => {
         thinkingIndicator.classList.remove('hidden');
+        // Scroll to bottom to ensure thinking indicator is visible and doesn't overlay user message
+        chatHistory.scrollTop = chatHistory.scrollHeight;
     });
     
     evtSource.addEventListener("thinking_end", () => {
