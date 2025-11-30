@@ -35,3 +35,80 @@ As an agent working on this project, you **MUST** adhere to the following cycle 
     3. If tests fail or error, FIX THEM IMMEDIATELY before doing anything else
 *   **Never assume tests pass.** Always verify. A BDD project with failing tests is a broken project.
 
+## Testing Strategy
+
+### Unit & Feature Tests (Default)
+By default, `behave` runs **fast, isolated tests** that mock external API calls. These tests:
+- Run in seconds
+- Don't require API keys
+- Don't consume quota
+- Are automatically run on every code change
+
+**Run all unit/feature tests:**
+```bash
+behave
+```
+
+### Integration Tests (Manual, Requires API Key)
+Integration tests make **real API calls** to verify end-to-end functionality. These tests:
+- Are **excluded from normal test runs** (tagged with `@integration` and `@manual`)
+- Require `GOOGLE_API_KEY` environment variable
+- Make real API calls that consume quota
+- Take longer to run
+- Verify actual API integration (e.g., image generation with Gemini)
+
+**Run integration tests:**
+```bash
+./run_integration_tests.sh
+```
+
+Or manually:
+```bash
+behave --tags=integration features/image_generation_integration.feature
+```
+
+**When to use integration tests:**
+- After changing API integration code (e.g., `nano_banana.py`)
+- Before major releases to verify external services work
+- When debugging issues that only appear with real API calls
+- To verify prompt engineering changes produce expected results
+
+**Do NOT run integration tests:**
+- During normal feature development
+- In automated CI/CD pipelines (unless quota is acceptable)
+- When iterating rapidly on code changes
+
+The `.behaverc` file excludes integration tests by default with `default_tags = -integration,-manual`.
+
+## Image Generation Architecture
+
+### Batch Tracking System
+Every image generation request creates a **unique batch** with a slug-based identifier (e.g., `cybernetic-feedback-loop-12345`). This enables:
+
+- **Context Preservation**: Each batch has a unique ID derived from the prompt + timestamp
+- **Organized Storage**: Images saved in `drafts/{batch-slug}/` for easy reference
+- **Clear Provenance**: SYSTEM messages include batch IDs: `"[SYSTEM] User selected an image from (batch: slug-12345)..."`
+- **History Tracking**: Batch IDs in chat history allow the agent to distinguish between old and new image requests
+
+### Image Generation Workflow
+When implementing or testing image-related features:
+
+1. **Generation**: `generate_candidates()` returns:
+   ```python
+   {
+       'candidates': [list of image paths],
+       'batch_slug': 'unique-identifier',
+       'batch_folder': 'drafts/unique-identifier'
+   }
+   ```
+
+2. **Selection**: User selects an image, triggering a SYSTEM message with batch context
+3. **Incorporation**: Agent uses the SYSTEM message to incorporate the correct image
+4. **Batch Awareness**: Agent ignores SYSTEM messages from old batches when working on new requests
+
+**Key Files:**
+- `src/deckbot/nano_banana.py`: Batch slug generation and image storage
+- `src/deckbot/session_service.py`: SYSTEM message creation with batch IDs
+- `src/deckbot/agent.py`: Agent instructions for batch-aware behavior
+- `features/image_batch_tracking.feature`: BDD tests for batch system
+

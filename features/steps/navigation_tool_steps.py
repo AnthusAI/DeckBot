@@ -9,7 +9,7 @@ from deckbot.agent import Agent
 def step_impl(context):
     context.presentation_context = {'name': 'NavToolTestDeck'}
     with patch('os.getenv', return_value='fake_key'):
-        context.agent = Agent(context.presentation_context)
+        context.agent = Agent(context.presentation_context, root_dir=context.temp_dir)
     
     presentation_dir = context.agent.tools_handler.presentation_dir
     if not os.path.exists(presentation_dir):

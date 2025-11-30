@@ -1,6 +1,6 @@
 from features.steps.cli_steps import temporary_environment
 from behave import use_fixture
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch, MagicMock, PropertyMock
 import os
 
 def before_scenario(context, scenario):
@@ -22,6 +22,10 @@ def before_scenario(context, scenario):
             webapp.current_service = None
         except:
             pass
+    
+    # Skip mocking for integration tests (tagged with @integration)
+    if 'integration' in scenario.tags:
+        return
     
     # Mock OLD Google Generative AI SDK to avoid real API calls during tests
     # This prevents "Could not initialize any Gemini model" errors
@@ -46,9 +50,26 @@ def before_scenario(context, scenario):
     # Set up mock behavior for new SDK (used by NanoBananaClient)
     mock_new_client = MagicMock()
     mock_response = MagicMock()
+    
+    # Create mock part with inline data
     mock_part = MagicMock()
-    mock_part.inline_data.data = b"fake_image_data"
+    # Minimal valid 1x1 PNG signature
+    valid_png_bytes = b'\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89\x00\x00\x00\nIDATx\x9cc\x00\x01\x00\x00\x05\x00\x01\r\n-\xb4\x00\x00\x00\x00IEND\xaeB`\x82'
+    
+    # Mock the inline_data.data attribute for base64 decoding check
+    mock_part.inline_data.data = valid_png_bytes
+    # Also ensure inline_data itself is truthy
+    type(mock_part).inline_data = PropertyMock(return_value=MagicMock(data=valid_png_bytes))
+
+    # Create mock candidate with content
+    mock_candidate = MagicMock()
+    mock_candidate.content.parts = [mock_part]
+    
+    # Set candidates on response
+    mock_response.candidates = [mock_candidate]
+    # Also keep parts for backward compatibility tests if any
     mock_response.parts = [mock_part]
+    
     mock_new_client.models.generate_content.return_value = mock_response
     context.mock_new_client_cls.return_value = mock_new_client
     

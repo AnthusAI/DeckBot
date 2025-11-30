@@ -17,7 +17,8 @@ def step_impl(context, prompt):
     # The global mock from environment.py handles google.genai.Client
     # Just call generate_candidates with default parameters
     with patch('deckbot.nano_banana.NanoBananaClient._open_folder') as mock_open:
-        context.candidates = context.nano_client.generate_candidates(prompt)
+        result = context.nano_client.generate_candidates(prompt)
+        context.candidates = result['candidates'] if isinstance(result, dict) else result
         
         # Create the actual files since the mock doesn't write them to disk
         for candidate_path in context.candidates:
@@ -30,7 +31,8 @@ def step_impl(context, prompt, ratio):
     # The global mock from environment.py handles google.genai.Client
     # Just call generate_candidates with the aspect_ratio
     with patch('deckbot.nano_banana.NanoBananaClient._open_folder') as mock_open:
-        context.candidates = context.nano_client.generate_candidates(prompt, aspect_ratio=ratio)
+        result = context.nano_client.generate_candidates(prompt, aspect_ratio=ratio)
+        context.candidates = result['candidates'] if isinstance(result, dict) else result
         
         # Create the actual files since the mock doesn't write them to disk
         for candidate_path in context.candidates:

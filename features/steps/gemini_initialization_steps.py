@@ -40,7 +40,7 @@ def step_create_agent(context):
     sys.stderr = context.captured_output
     
     try:
-        context.agent = Agent(context.presentation_context)
+        context.agent = Agent(context.presentation_context, root_dir=context.temp_dir)
         context.agent_created = True
         context.agent_error = None
     except Exception as e:

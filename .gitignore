@@ -37,5 +37,13 @@ presentations/*
 # Except we might want to allow committing demo decks?
 # For now, ignore all to be safe and clean.
 
-# User preferences
+# User preferences and runtime state
 .deckbot.yaml
+.deckbot_state.yaml
+
+# Test outputs
+plain.output
+*.output
+
+# Debug/temporary scripts
+debug_*.py

@@ -11,7 +11,7 @@ from deckbot.manager import PresentationManager
 console = Console()
 
 class PresentationTools:
-    def __init__(self, presentation_context, nano_client: NanoBananaClient):
+    def __init__(self, presentation_context, nano_client: NanoBananaClient, root_dir=None):
         self.context = presentation_context
         self.nano_client = nano_client
         self.status_spinner = None # To be set by Agent/REPL
@@ -21,19 +21,41 @@ class PresentationTools:
         self.on_presentation_updated = None
         
         # Hook for tool call events (start, end, error)
-        self.on_tool_call = None
+        self.tool_listeners = []
         
         # Resolve presentation root
-        env_root = os.environ.get('VIBE_PRESENTATION_ROOT')
-        if env_root:
-            root = env_root
-        elif os.path.exists("presentations"):
-            root = os.path.abspath("presentations")
+        if root_dir:
+            root = root_dir
         else:
-            root = os.path.expanduser("~/.vibe_presentation")
+            env_root = os.environ.get('VIBE_PRESENTATION_ROOT')
+            if env_root:
+                root = env_root
+            elif os.path.exists("presentations"):
+                root = os.path.abspath("presentations")
+            else:
+                root = os.path.expanduser("~/.vibe_presentation")
         
         self.presentation_dir = os.path.join(root, presentation_context['name'])
         self.manager = PresentationManager(root_dir=root)
+
+    def add_tool_listener(self, listener):
+        self.tool_listeners.append(listener)
+
+    def _notify_tool_listeners(self, event, data):
+        for listener in self.tool_listeners:
+            try:
+                listener(event, data)
+            except Exception as e:
+                print(f"Error in tool listener: {e}")
+
+    @property
+    def on_tool_call(self):
+        return self._notify_tool_listeners
+        
+    @on_tool_call.setter
+    def on_tool_call(self, callback):
+        if callback:
+            self.tool_listeners.append(callback)
 
     def _wrap_tool(self, tool_name, func):
         """Wrapper that notifies before/after tool execution."""
@@ -131,10 +153,25 @@ class PresentationTools:
         if not os.path.exists(target_dir):
              return f"Directory '{directory}' does not exist."
 
-        files = os.listdir(target_dir)
-        if not files:
-            return "Directory is empty."
-        return "\n".join(files)
+        try:
+            items = []
+            for name in os.listdir(target_dir):
+                path = os.path.join(target_dir, name)
+                try:
+                    mtime = os.path.getmtime(path)
+                except OSError:
+                    mtime = 0
+                items.append((name, mtime))
+            
+            # Sort by mtime descending (newest first)
+            items.sort(key=lambda x: x[1], reverse=True)
+            
+            files = [x[0] for x in items]
+            if not files:
+                return "Directory is empty."
+            return "\n".join(files)
+        except Exception as e:
+            return f"Error listing files: {str(e)}"
 
     def read_file(self, filename: str):
         """Read content of a file in the presentation directory."""
@@ -148,7 +185,7 @@ class PresentationTools:
             return f"Error reading file: {str(e)}"
 
     def write_file(self, filename: str, content: str):
-        """Write content to a file in the presentation directory."""
+        """Write content to a file in the presentation directory. WARNING: Overwrites entire file."""
         if not os.path.exists(self.presentation_dir):
             return "Presentation directory does not exist."
         path = os.path.join(self.presentation_dir, filename)
@@ -158,6 +195,30 @@ class PresentationTools:
             return f"Successfully wrote to {filename}"
         except Exception as e:
             return f"Error writing file: {str(e)}"
+
+    def replace_text(self, filename: str, old_text: str, new_text: str):
+        """Replace text in a file. Use this to edit existing files safely."""
+        if not os.path.exists(self.presentation_dir):
+            return "Presentation directory does not exist."
+        path = os.path.join(self.presentation_dir, filename)
+        
+        if not os.path.exists(path):
+            return f"Error: File '{filename}' not found."
+            
+        try:
+            with open(path, 'r') as f:
+                content = f.read()
+            
+            if old_text not in content:
+                return f"Error: '{old_text}' not found in {filename}."
+                
+            new_content = content.replace(old_text, new_text)
+            
+            with open(path, 'w') as f:
+                f.write(new_content)
+            return f"Successfully replaced text in {filename}"
+        except Exception as e:
+            return f"Error replacing text: {str(e)}"
 
     def copy_file(self, source: str, destination: str):
         """Copy a file within the presentation directory."""
@@ -267,7 +328,10 @@ class PresentationTools:
             # The client itself needs to support these args. Assuming it does or checking next.
             # If NanoBananaClient.generate_candidates doesn't take them, we might need to update it too.
             # For now, let's update this signature to match the feature request.
-            candidates = self.nano_client.generate_candidates(prompt, aspect_ratio=aspect_ratio, resolution=resolution)
+            result = self.nano_client.generate_candidates(prompt, aspect_ratio=aspect_ratio, resolution=resolution)
+            candidates = result['candidates']
+            batch_slug = result['batch_slug']
+            
             if not candidates:
                 return "Failed to generate images."
             

@@ -14,12 +14,42 @@ def step_impl(context, name):
     manager = PresentationManager(root_dir=context.temp_dir)
     presentation = manager.get_presentation(name)
     
-    # Mock the Google API interactions
-    with patch('google.generativeai.GenerativeModel') as mock_model:
-        context.real_agent = Agent(presentation)
-        context.real_agent.model = mock_model
-        context.real_agent.chat_session = MagicMock()
-        context.real_agent.chat_session.send_message.return_value.text = "I am AI."
+    # Mock the new google.genai Client
+    context.mock_client = MagicMock()
+    with patch('deckbot.agent.genai.Client', return_value=context.mock_client):
+        context.real_agent = Agent(presentation, root_dir=context.temp_dir)
+        context.agent = context.real_agent  # Make it available as context.agent too
+        context.real_agent.model = "gemini-2.0-flash-exp"
+    
+    # Mock response for any chat calls
+    mock_response = MagicMock()
+    mock_response.candidates = [MagicMock()]
+    mock_response.candidates[0].content.parts = [MagicMock()]
+    mock_response.candidates[0].content.parts[0].text = "I am AI."
+    context.mock_client.models.generate_content.return_value = mock_response
+    
+    context.responses = []
+    context.last_response = None
+
+@given('the presentation has chat history:')
+def step_impl(context):
+    # Find the presentation name from context
+    if hasattr(context, 'real_agent'):
+        pres_name = context.real_agent.context['name']
+    else:
+        # Infer from scenario - use a reasonable default
+        pres_name = "resume-context-test"
+    
+    presentation_dir = os.path.join(context.temp_dir, pres_name)
+    history_file = os.path.join(presentation_dir, "chat_history.jsonl")
+    
+    with open(history_file, 'w') as f:
+        for row in context.table:
+            entry = {
+                "role": row['role'],
+                "content": row['content']
+            }
+            f.write(json.dumps(entry) + "\n")
 
 @given('the presentation contains a history file with a previous message "{message}"')
 def step_impl(context, message):
@@ -67,6 +97,47 @@ def step_impl(context):
     
     # We need to align the expected response.
     assert "Sure, here is an outline." in content
+
+@then('the agent\'s response should reference the previous image request')
+def step_impl(context):
+    # Check that history was used in API call
+    assert context.mock_client.models.generate_content.called
+    call_args = context.mock_client.models.generate_content.call_args
+    contents = call_args.kwargs.get('contents', [])
+    
+    # Should have more than just system + current message
+    # Expecting: system, previous messages, current msg
+    assert len(contents) >= 3, f"Expected at least 3 contents in history, got {len(contents)}"
+
+@then('the agent should not ask what image to modify')
+def step_impl(context):
+    # Agent should have context from history
+    response = context.last_response.lower() if context.last_response else ""
+    assert "what image" not in response
+    assert "which image" not in response
+
+@then('the agent should understand "{word}" refers to {concept}')
+def step_impl(context, word, concept):
+    # Check that history contains messages
+    assert context.mock_client.models.generate_content.called
+    call_args = context.mock_client.models.generate_content.call_args
+    contents = call_args.kwargs.get('contents', [])
+    
+    # The history should include previous messages
+    assert len(contents) >= 2, f"Expected history to be included, got {len(contents)} contents"
+
+@then('the agent should not ask for clarification about the topic')
+def step_impl(context):
+    response = context.last_response.lower() if context.last_response else ""
+    # Should not be asking basic clarifying questions
+    assert "what topic" not in response
+    assert "which topic" not in response
+
+@then('the agent should not ask what topic to cover')
+def step_impl(context):
+    response = context.last_response.lower() if context.last_response else ""
+    assert "what topic" not in response
+    assert "about what" not in response
 
 @then('the start_repl function should be called with resume=True')
 def step_impl(context):

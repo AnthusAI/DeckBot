@@ -84,29 +84,38 @@ class SessionService:
         def _generate():
             self.last_image_prompt = prompt
             
-            def progress(current, total, status, current_candidates):
+            def progress(current, total, status, current_candidates, prompt_details=None):
                 # Update progress AND show candidates as they're generated
-                self._notify("image_progress", {
+                payload = {
                     "current": current, 
                     "total": total, 
                     "status": status,
                     "candidates": current_candidates  # Show images incrementally
-                })
+                }
+                if prompt_details:
+                    payload["prompt_details"] = prompt_details
+                self._notify("image_progress", payload)
             
             try:
                 print(f"[IMAGE GEN] Starting generation for prompt: {prompt[:50]}... (aspect_ratio={aspect_ratio}, resolution={resolution})")
                 # Deterministic: Always generate 4 candidates
-                candidates = self.nano_client.generate_candidates(
+                result = self.nano_client.generate_candidates(
                     prompt, 
                     status_spinner=None, 
                     progress_callback=progress,
                     aspect_ratio=aspect_ratio,
                     resolution=resolution
                 )
-                print(f"[IMAGE GEN] Generated {len(candidates)} candidates")
+                candidates = result['candidates']
+                batch_slug = result['batch_slug']
+                print(f"[IMAGE GEN] Generated {len(candidates)} candidates in batch: {batch_slug}")
+                
+                # Store candidates with batch info
                 self.pending_candidates = candidates
+                self.current_batch_slug = batch_slug
+                
                 # Final notification with all candidates
-                self._notify("images_ready", {"candidates": candidates, "prompt": prompt})
+                self._notify("images_ready", {"candidates": candidates, "prompt": prompt, "batch_slug": batch_slug})
                 print(f"[IMAGE GEN] Notified images_ready")
             except Exception as e:
                 print(f"[IMAGE GEN ERROR] {type(e).__name__}: {e}")
@@ -122,21 +131,27 @@ class SessionService:
         self._notify("generating_images_start", {"prompt": prompt})
         self.last_image_prompt = prompt
         
-        def progress(current, total, status, current_candidates):
-            self._notify("image_progress", {
+        def progress(current, total, status, current_candidates, prompt_details=None):
+            payload = {
                 "current": current, 
                 "total": total, 
                 "status": status,
                 "candidates": current_candidates
-            })
+            }
+            if prompt_details:
+                payload["prompt_details"] = prompt_details
+            self._notify("image_progress", payload)
         
         try:
             # agent.nano_client.generate_candidates expects a rich spinner potentially.
             # We pass it through if provided (CLI mode).
-            candidates = self.nano_client.generate_candidates(prompt, status_spinner=status_spinner, progress_callback=progress)
+            result = self.nano_client.generate_candidates(prompt, status_spinner=status_spinner, progress_callback=progress)
+            candidates = result['candidates']
+            batch_slug = result['batch_slug']
             
             self.pending_candidates = candidates
-            self._notify("images_ready", {"candidates": candidates, "prompt": prompt})
+            self.current_batch_slug = batch_slug
+            self._notify("images_ready", {"candidates": candidates, "prompt": prompt, "batch_slug": batch_slug})
             return candidates
         except Exception as e:
             self._notify("error", {"message": str(e)})
@@ -153,7 +168,11 @@ class SessionService:
         4. DETERMINISTIC: Notify UI of selection
         5. DETERMINISTIC: Tell agent about the selection so it can incorporate the image
         """
+        print(f"[SELECT_IMAGE] Called with index={index}, filename={filename}")
+        print(f"[SELECT_IMAGE] pending_candidates={self.pending_candidates}")
+        
         if not self.pending_candidates or index < 0 or index >= len(self.pending_candidates):
+            print(f"[SELECT_IMAGE] Invalid selection - returning None")
             return None
         
         # Step 2: Auto-generate filename if not provided (deterministic naming)
@@ -185,7 +204,9 @@ class SessionService:
             def _notify_agent():
                 try:
                     # This is the key: we're telling the agent what the system did
-                    system_notification = f"[SYSTEM] User selected an image. It has been saved to `{rel_path}`. Please incorporate this image into the presentation."
+                    # Include batch_slug to provide context about which generation batch this selection is from
+                    batch_info = f" (batch: {self.current_batch_slug})" if hasattr(self, 'current_batch_slug') else ""
+                    system_notification = f"[SYSTEM] User selected an image from{batch_info}. It has been saved to `{rel_path}`. Please incorporate this image into the presentation."
                     
                     self._notify("message", {"role": "system", "content": system_notification})
                     self._notify("thinking_start")
@@ -229,8 +250,49 @@ class SessionService:
 
     def get_history(self):
         """Get chat history."""
-        # Agent.load_history returns list of {role, parts=[text]}
-        return self.agent.load_history()
+        # Agent.load_history returns list of {role, parts=[Part objects]}
+        # Convert to JSON-serializable format
+        history = self.agent.load_history()
+        serializable_history = []
+        
+        for entry in history:
+            serializable_entry = {"role": entry.get("role", "user")}
+            
+            # Convert parts to serializable format
+            parts = entry.get("parts", [])
+            serializable_parts = []
+            
+            for part in parts:
+                part_dict = {}
+                
+                # Check all possible part types (a part can have multiple fields)
+                if hasattr(part, 'text') and part.text:
+                    part_dict["text"] = part.text
+                if hasattr(part, 'function_call') and part.function_call:
+                    part_dict["function_call"] = {
+                        "name": part.function_call.name,
+                        "args": dict(part.function_call.args)
+                    }
+                if hasattr(part, 'function_response') and part.function_response:
+                    part_dict["function_response"] = {
+                        "name": part.function_response.name,
+                        "response": dict(part.function_response.response)
+                    }
+                
+                # If we extracted any fields, add the part
+                if part_dict:
+                    serializable_parts.append(part_dict)
+                elif isinstance(part, dict):
+                    # Already serializable
+                    serializable_parts.append(part)
+                elif isinstance(part, str):
+                    # Plain string
+                    serializable_parts.append({"text": part})
+            
+            serializable_entry["parts"] = serializable_parts
+            serializable_history.append(serializable_entry)
+        
+        return serializable_history
 
     def get_state(self):
         """Get current session state."""

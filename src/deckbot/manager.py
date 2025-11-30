@@ -8,15 +8,17 @@ class PresentationManager:
     def __init__(self, root_dir=None):
         if root_dir:
             self.root_dir = root_dir
-        elif os.environ.get('VIBE_PRESENTATION_ROOT'):
-            self.root_dir = os.environ.get('VIBE_PRESENTATION_ROOT')
         else:
-            # Prefer local presentations/ folder if it exists in CWD, otherwise default to ~/.vibe_presentation
-            local_presentations = os.path.abspath("presentations")
-            if os.path.exists(local_presentations):
-                self.root_dir = local_presentations
+            # Priority order: VIBE_PRESENTATION_ROOT env var, local presentations/ folder, ~/.vibe_presentation
+            env_root = os.environ.get('VIBE_PRESENTATION_ROOT')
+            if env_root:
+                self.root_dir = env_root
             else:
-                self.root_dir = os.path.expanduser("~/.vibe_presentation")
+                local_presentations = os.path.abspath("presentations")
+                if os.path.exists(local_presentations):
+                    self.root_dir = local_presentations
+                else:
+                    self.root_dir = os.path.expanduser("~/.vibe_presentation")
         
         if not os.path.exists(self.root_dir):
             os.makedirs(self.root_dir)

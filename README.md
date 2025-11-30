@@ -38,7 +38,7 @@ This project uses **Behavior Driven Development** (using `behave`) as a primary 
 
 This project has **comprehensive BDD test coverage** for both backend and frontend:
 
-**Run all tests:**
+**Run all tests (fast, no API calls):**
 ```bash
 behave
 ```
@@ -63,6 +63,26 @@ behave --no-capture
 **Test a specific scenario:**
 ```bash
 behave features/web_ui.feature -n "Color Theme Selection"
+```
+
+**Integration tests (slow, requires API key):**
+
+Integration tests make real API calls to verify image generation and other external services.
+They are **excluded from normal test runs** by default to keep tests fast and avoid consuming API quota.
+
+Requirements:
+- `GOOGLE_API_KEY` environment variable set
+- Internet connection
+- May consume API quota
+
+Run integration tests:
+```bash
+./run_integration_tests.sh
+```
+
+Or manually:
+```bash
+behave --tags=integration features/image_generation_integration.feature
 ```
 
 All features are documented in the `features/` directory using Gherkin syntax. Read them to understand exactly how the system behaves!

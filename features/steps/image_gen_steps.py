@@ -22,7 +22,14 @@ def step_impl(context, prompt):
     with patch('deckbot.nano_banana.NanoBananaClient._open_folder') as mock_open:
         # Call generate_candidates - it will use the mocked client from environment.py
         # which returns mock_part.inline_data.data = b"fake_image_data"
-        context.candidates = context.nano_client.generate_candidates(prompt)
+        result = context.nano_client.generate_candidates(prompt)
+        
+        # Handle both old and new return formats for backwards compatibility
+        if isinstance(result, dict):
+            context.candidates = result['candidates']
+            context.batch_slug = result.get('batch_slug')
+        else:
+            context.candidates = result
         
         # Create the actual files since the mock doesn't write them to disk
         # (the mock returns fake data but generate_candidates may not write it)
@@ -185,7 +192,8 @@ def step_impl(context):
     # Mock generate_candidates to avoid real API calls but capture the call
     # Also mock IntPrompt to avoid waiting for user input
     # Also mock save_selection to avoid file operations
-    with patch.object(context.nano_client, 'generate_candidates', return_value=['fake1.png', 'fake2.png', 'fake3.png', 'fake4.png']) as mock_gen, \
+    mock_result = {'candidates': ['fake1.png', 'fake2.png', 'fake3.png', 'fake4.png'], 'batch_slug': 'test-123', 'batch_folder': 'drafts/test-123'}
+    with patch.object(context.nano_client, 'generate_candidates', return_value=mock_result) as mock_gen, \
          patch('deckbot.tools.IntPrompt.ask', return_value=1), \
          patch.object(context.nano_client, 'save_selection', return_value='saved_image.png'):
         tools.generate_image("a sunset")
@@ -219,7 +227,8 @@ def step_impl(context):
     # Mock generate_candidates to avoid real API calls and capture the call
     # Also mock IntPrompt to avoid waiting for user input
     # Also mock save_selection to avoid file operations
-    with patch.object(context.nano_client, 'generate_candidates', return_value=['fake1.png', 'fake2.png', 'fake3.png', 'fake4.png']) as mock_gen, \
+    mock_result = {'candidates': ['fake1.png', 'fake2.png', 'fake3.png', 'fake4.png'], 'batch_slug': 'test-123', 'batch_folder': 'drafts/test-123'}
+    with patch.object(context.nano_client, 'generate_candidates', return_value=mock_result) as mock_gen, \
          patch('deckbot.tools.IntPrompt.ask', return_value=1), \
          patch.object(context.nano_client, 'save_selection', return_value='saved_image.png'):
         tools.generate_image("a sunset", aspect_ratio="1:1")

@@ -3,6 +3,8 @@ import shutil
 import time
 import subprocess
 import json
+import base64
+from io import BytesIO
 import PIL.Image
 from google import genai
 from google.genai import types
@@ -12,17 +14,38 @@ from google.api_core.exceptions import ResourceExhausted
 
 console = Console()
 
+def generate_batch_slug(prompt, max_length=40):
+    """Generate a unique slug for an image batch based on prompt and timestamp."""
+    import re
+    # Clean the prompt: lowercase, replace spaces/special chars with dashes
+    slug = prompt.lower()
+    slug = re.sub(r'[^a-z0-9]+', '-', slug)
+    slug = slug.strip('-')
+    
+    # Truncate to max length
+    if len(slug) > max_length:
+        slug = slug[:max_length].rstrip('-')
+    
+    # Add timestamp for uniqueness
+    timestamp = int(time.time() * 1000) % 100000  # Last 5 digits of ms timestamp
+    slug = f"{slug}-{timestamp}"
+    
+    return slug
+
 class NanoBananaClient:
-    def __init__(self, presentation_context):
+    def __init__(self, presentation_context, root_dir=None):
         self.context = presentation_context
         
-        env_root = os.environ.get('VIBE_PRESENTATION_ROOT')
-        if env_root:
-            root = env_root
-        elif os.path.exists("presentations"):
-            root = os.path.abspath("presentations")
+        if root_dir:
+            root = root_dir
         else:
-            root = os.path.expanduser("~/.vibe_presentation")
+            env_root = os.environ.get('VIBE_PRESENTATION_ROOT')
+            if env_root:
+                root = env_root
+            elif os.path.exists("presentations"):
+                root = os.path.abspath("presentations")
+            else:
+                root = os.path.expanduser("~/.vibe_presentation")
             
         self.presentation_dir = os.path.join(root, presentation_context['name'])
         self.images_dir = os.path.join(self.presentation_dir, "images")
@@ -44,8 +67,8 @@ class NanoBananaClient:
         self.client = None
         if self.api_key:
              self.client = genai.Client(api_key=self.api_key)
-             # Imagen 3 via Gemini API
-             self.model_name = 'imagen-3.0-generate-001'
+             # Gemini 3 Pro Image Preview (Nano Banana Pro) - supports image generation
+             self.model_name = 'gemini-3-pro-image-preview'
         
     def generate_candidates(self, prompt, status_spinner=None, progress_callback=None, aspect_ratio="1:1", resolution="2K"):
         """
@@ -70,12 +93,14 @@ class NanoBananaClient:
         style_reference_path = None
         style_reference_image = None
         theme_info = ""
+        design_opinions = {}
         
         if os.path.exists(metadata_path):
             try:
                 with open(metadata_path, "r") as f:
                     data = json.load(f)
                     style = data.get("image_style", {})
+                    design_opinions = data.get("design_opinions", {})
                     if style.get("prompt"):
                         style_prompt = style["prompt"]
                     
@@ -105,8 +130,9 @@ class NanoBananaClient:
                             import re
                             theme_match = re.search(r'^theme:\s*(\w+)', front_matter, re.MULTILINE)
                             if theme_match:
-                                theme_name = theme_match.group(1)
-                                theme_info = f"Marp theme: {theme_name}. "
+                                # theme_name = theme_match.group(1)
+                                # theme_info = f"Marp theme: {theme_name}. " # Removed as per user request
+                                pass
                             
                             # Extract custom CSS style block
                             style_match = re.search(r'^style:\s*\|(.+?)(?=^[a-z]+:|\Z)', front_matter, re.MULTILINE | re.DOTALL)
@@ -147,18 +173,62 @@ class NanoBananaClient:
             "21:9": "ultra-wide image (21:9 aspect ratio)"
         }.get(aspect_ratio, f"image with {aspect_ratio} aspect ratio")
         
-        final_prompt = f"Generate a {aspect_ratio_instruction}. {final_prompt}"
+        # Construct System Instructions (Context & Style)
+        system_instructions = []
+        system_instructions.append(f"Generate a {aspect_ratio_instruction}.")
+        
+        if style_reference_image:
+             system_instructions.append("Using the provided style reference image ONLY as a style reference. Ignore the content of the reference image; copy only its visual style, color palette, and vibe.")
+             
+        if theme_info:
+            system_instructions.append(theme_info)
+            
+        if style_prompt:
+             system_instructions.append(f"Style instructions: {style_prompt}")
+             
+        if design_opinions:
+            opinions_text = []
+            for key, value in design_opinions.items():
+                val_str = ", ".join(value) if isinstance(value, list) else str(value)
+                opinions_text.append(f"{key}: {val_str}")
+            if opinions_text:
+                system_instructions.append("Design opinions: " + "; ".join(opinions_text))
+             
+        system_message = " ".join(system_instructions)
+        user_message = prompt
+        
+        # Log the separated prompts nicely
+        from rich.rule import Rule
+        console.print(Rule(title="IMAGE GENERATION REQUEST", style="bold cyan"))
+        console.print(f"[bold yellow]User Message:[/bold yellow] {user_message}")
+        console.print(f"[bold blue]System Instructions:[/bold blue] {system_message}")
+        console.print(Rule(style="bold cyan"))
+        
+        # Prepare Prompt Details for UI
+        prompt_details = {
+            "user_message": user_message,
+            "system_message": system_message,
+            "aspect_ratio": aspect_ratio,
+            "resolution": resolution
+        }
             
         if status_spinner:
             status_spinner.start() # Resume
+            
+        if progress_callback:
+            # Send initial update with prompt details
+            progress_callback(0, 4, "Initializing generation...", [], prompt_details=prompt_details)
 
         candidates = []
         
         # Create isolated folder for this request
-        timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-        safe_prompt = "".join([c if c.isalnum() else "_" for c in prompt[:30]]).strip("_")
-        request_folder = os.path.join(self.drafts_dir, f"{timestamp}_{safe_prompt}")
+        # Generate unique batch slug for this image generation request
+        batch_slug = generate_batch_slug(prompt)
+        request_folder = os.path.join(self.drafts_dir, batch_slug)
         os.makedirs(request_folder, exist_ok=True)
+        
+        # Store batch_slug for later reference
+        self.last_batch_slug = batch_slug
         
         if not self.client:
             console.print("[red]Error: API Key not found.[/red]")
@@ -167,15 +237,23 @@ class NanoBananaClient:
         for i in range(4):
             if progress_callback:
                 progress_callback(i+1, 4, f"Generating image {i+1}/4...", candidates)
-            import sys
-            if 'behave' not in sys.modules:
-                console.print(f"  Generating candidate {i+1}/4...")
+            console.print(f"  Generating candidate {i+1}/4...")
             try:
                 # Build contents list - include style reference image if available
                 contents = []
                 if style_reference_image:
                     contents.append(style_reference_image)
-                contents.append(final_prompt)
+                    import sys
+                    if 'behave' not in sys.modules:
+                        console.print(f"  [dim]Including style reference image (size: {style_reference_image.size})[/dim]")
+                
+                if system_message:
+                    contents.append(system_message)
+                contents.append(user_message)
+                
+                import sys
+                if 'behave' not in sys.modules:
+                    console.print(f"  [dim]API Call - Model: {self.model_name}, Response Modality: IMAGE[/dim]")
                 
                 # Use generate_content for Gemini native image generation
                 response = self.client.models.generate_content(
@@ -188,25 +266,47 @@ class NanoBananaClient:
                 
                 image_saved = False
                 
+                # The v1beta SDK returns data in candidates -> content -> parts
+                candidate_parts = []
+                if hasattr(response, 'candidates') and response.candidates:
+                    console.print(f"  [dim]Response has {len(response.candidates)} candidate(s)[/dim]")
+                    for c_idx, candidate in enumerate(response.candidates):
+                        parts = []
+                        content = getattr(candidate, 'content', None)
+                        if content is not None:
+                            parts = getattr(content, 'parts', []) or []
+                        console.print(f"    Candidate {c_idx}: parts={len(parts)}")
+                        candidate_parts.extend(parts)
+                elif hasattr(response, 'parts') and response.parts:
+                    console.print(f"  [dim]Response has {len(response.parts)} part(s)[/dim]")
+                    candidate_parts = response.parts
+                else:
+                    console.print(f"  [red]Response has neither parts nor candidates[/red]")
+                
+                if not candidate_parts:
+                    console.print("  [red]No inline parts returned in response[/red]")
+                
                 # Process Gemini native image generation response
-                if response.parts:
-                    for part in response.parts:
-                        # Check for inline_data (Gemini format)
-                        if hasattr(part, 'inline_data') and part.inline_data:
-                            output_path = os.path.join(request_folder, f"candidate_{i+1}.png")
-                            # Use as_image() method to get PIL Image
-                            image = part.as_image()
-                            image.save(output_path)
-                            candidates.append(output_path)
-                            image_saved = True
-                            if progress_callback:
-                                progress_callback(i+1, 4, f"Generated image {i+1}/4", candidates)
-                            break
+                for part in candidate_parts:
+                    # Check for inline_data (Gemini format)
+                    if hasattr(part, 'inline_data') and part.inline_data:
+                        output_path = os.path.join(request_folder, f"candidate_{i+1}.png")
+                        image_bytes = getattr(part.inline_data, 'data', None)
+                        if isinstance(image_bytes, str):
+                            image_bytes = base64.b64decode(image_bytes)
+                        if not image_bytes:
+                            continue
+                        image = PIL.Image.open(BytesIO(image_bytes))
+                        image.save(output_path, format="PNG")
+                        candidates.append(output_path)
+                        image_saved = True
+                        console.print(f"  [green]✓ Saved image to candidate_{i+1}.png (size: {image.size})[/green]")
+                        if progress_callback:
+                            progress_callback(i+1, 4, f"Generated image {i+1}/4", candidates)
+                        break
 
                 if not image_saved:
-                    import sys
-                    if 'behave' not in sys.modules:
-                        console.print(f"  [red]No image found in response for candidate {i+1}[/red]")
+                    console.print(f"  [red]✗ No image found in response for candidate {i+1}[/red]")
                     candidates.append(self._create_dummy(request_folder, i+1))
                     if progress_callback:
                         progress_callback(i+1, 4, f"Generated image {i+1}/4 (fallback)", candidates)
@@ -219,19 +319,34 @@ class NanoBananaClient:
                 if progress_callback:
                     progress_callback(i+1, 4, f"Generated image {i+1}/4 (quota exceeded)", candidates)
             except Exception as e:
-                # import sys
-                # if 'behave' not in sys.modules:
-                console.print(f"  [red]Error generating candidate {i+1}: {e}[/red]")
+                # Always show errors, even in tests
+                console.print(f"  [red]Error generating candidate {i+1}: {type(e).__name__}: {e}[/red]")
                 candidates.append(self._create_dummy(request_folder, i+1))
                 if progress_callback:
                     progress_callback(i+1, 4, f"Generated image {i+1}/4 (error)", candidates)
             
             time.sleep(1)
 
-        # Only open folder in CLI mode (when no progress callback provided)
-        if not progress_callback:
+        # Count actual vs fallback images
+        actual_images = sum(1 for c in candidates if os.path.exists(c) and os.path.getsize(c) > 100)
+        import sys
+        if 'behave' not in sys.modules:
+            if actual_images < 4:
+                console.print(f"\n[yellow]Warning: Only {actual_images}/4 images generated successfully. {4-actual_images} fallback(s) created.[/yellow]")
+            else:
+                console.print(f"\n[green]Successfully generated all 4 images![/green]")
+        
+        # Only open folder in CLI mode (when no progress callback provided and not in tests)
+        import sys
+        if not progress_callback and 'behave' not in sys.modules:
             self._open_folder(request_folder)
-        return candidates
+        
+        # Return both candidates and batch_slug
+        return {
+            'candidates': candidates,
+            'batch_slug': batch_slug,
+            'batch_folder': request_folder
+        }
 
     def _create_dummy(self, folder, index):
         path = os.path.join(folder, f"candidate_{index}.png")
@@ -247,9 +362,17 @@ class NanoBananaClient:
             if progress_callback:
                 progress_callback(i+1, 4, f"Generating image {i+1}/4...")
             candidates.append(self._create_dummy(folder, i+1))
-        if not progress_callback:
+        import sys
+        if not progress_callback and 'behave' not in sys.modules:
             self._open_folder(folder)
-        return candidates
+        
+        # Extract batch_slug from folder path
+        batch_slug = os.path.basename(folder)
+        return {
+            'candidates': candidates,
+            'batch_slug': batch_slug,
+            'batch_folder': folder
+        }
 
     def _open_folder(self, path):
         # Try opening in VS Code first using direct execution to bypass shell/path issues

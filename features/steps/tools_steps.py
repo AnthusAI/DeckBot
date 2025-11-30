@@ -119,7 +119,11 @@ def step_impl(context, prompt):
     presentation = manager.get_presentation("test-deck")
     
     mock_nano = MagicMock()
-    mock_nano.generate_candidates.return_value = ["drafts/1.png", "drafts/2.png"]
+    mock_nano.generate_candidates.return_value = {
+        'candidates': ["drafts/1.png", "drafts/2.png"],
+        'batch_slug': 'test-batch-12345',
+        'batch_folder': 'drafts/test-batch-12345'
+    }
     mock_nano.save_selection.return_value = os.path.join(context.temp_dir, "test-deck", "images", "selected.png")
     
     tools = PresentationTools(presentation, mock_nano)

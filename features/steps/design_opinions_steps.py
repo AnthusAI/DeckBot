@@ -66,12 +66,10 @@ def step_impl(context):
         def getenv_side_effect(key, default=None):
             if key == 'GOOGLE_API_KEY':
                 return 'fake_key'
-            if key == 'VIBE_PRESENTATION_ROOT':
-                return context.temp_dir
             return default
             
         mock_getenv.side_effect = getenv_side_effect
         
-        context.agent = Agent(context.presentation_context)
+        context.agent = Agent(context.presentation_context, root_dir=context.temp_dir)
         # Store the system prompt for testing
         context.system_prompt = context.agent._build_system_prompt()

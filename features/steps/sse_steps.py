@@ -50,11 +50,15 @@ def step_impl(context):
     # SessionService stores nano_client from agent.nano_client
     # Since we mocked Agent, agent.nano_client is a Mock.
     
-    def mock_generate(prompt, status_spinner=None, progress_callback=None):
+    def mock_generate(prompt, status_spinner=None, progress_callback=None, **kwargs):
         if progress_callback:
             progress_callback(1, 4, "Generating...", ["img1"])
             progress_callback(2, 4, "Generating...", ["img1", "img2"])
-        return ["path/to/1", "path/to/2"]
+        return {
+            'candidates': ["path/to/1", "path/to/2"],
+            'batch_slug': 'test-batch-12345',
+            'batch_folder': '/fake/drafts/test-batch-12345'
+        }
     
     context.service.nano_client.generate_candidates.side_effect = mock_generate
     
@@ -69,8 +73,10 @@ def step_impl(context):
 def step_impl(context):
     ready_events = [e for e in context.events if e[0] == "images_ready"]
     assert len(ready_events) == 1
-    # Check data
-    assert len(ready_events[0][1]) == 2
+    # Check data - should have candidates key with 2 paths
+    event_data = ready_events[0][1]
+    assert "candidates" in event_data, f"Expected 'candidates' in event data, got: {event_data.keys()}"
+    assert len(event_data["candidates"]) == 2, f"Expected 2 candidates, got {len(event_data['candidates'])}"
 
 @given("I asked the agent to add a slide")
 def step_impl(context):

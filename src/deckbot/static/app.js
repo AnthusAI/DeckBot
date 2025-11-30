@@ -642,8 +642,40 @@ document.addEventListener('DOMContentLoaded', () => {
             chatHistory.innerHTML = '';
             if (data.history) {
                 data.history.forEach(msg => {
-                    if (msg.role !== 'system') {
-                        appendMessage(msg.role, msg.parts[0].text || msg.parts[0]);
+                    if (msg.role === 'system') {
+                        return; // Skip system messages in display
+                    }
+                    
+                    // Handle different part types
+                    if (msg.parts && msg.parts.length > 0) {
+                        const part = msg.parts[0];
+                        
+                        // Text part
+                        if (part.text) {
+                            appendMessage(msg.role, part.text);
+                        }
+                        // Function call (tool usage) - display as system action
+                        else if (part.function_call) {
+                            const toolName = part.function_call.name;
+                            const args = JSON.stringify(part.function_call.args);
+                            appendMessage(msg.role, `🔧 Used tool ${toolName}: ${args}`);
+                        }
+                        // Function response (tool result) - skip in UI for now
+                        else if (part.function_response) {
+                            // Skip tool responses in chat display
+                        }
+                        // Fallback for old format (plain string)
+                        else if (typeof part === 'string') {
+                            appendMessage(msg.role, part);
+                        }
+                    }
+                    // Old format: content field
+                    else if (msg.content) {
+                        // Skip [SYSTEM] messages even in old format
+                        if (msg.content.startsWith('[SYSTEM]')) {
+                            return;
+                        }
+                        appendMessage(msg.role, msg.content);
                     }
                 });
             }
@@ -721,6 +753,40 @@ document.addEventListener('DOMContentLoaded', () => {
         
         messageDiv.appendChild(avatar);
         messageDiv.appendChild(messageContent);
+        
+        chatHistory.appendChild(messageDiv);
+        chatHistory.scrollTop = chatHistory.scrollHeight;
+        refreshIcons();
+    }
+
+    function appendPromptDetails(details) {
+        const messageDiv = document.createElement('div');
+        messageDiv.className = 'message system prompt-details';
+        
+        const avatar = document.createElement('div');
+        avatar.className = 'message-avatar';
+        avatar.innerHTML = '<i data-lucide="cpu" style="width: 16px; height: 16px;"></i>';
+        
+        const content = document.createElement('div');
+        content.className = 'message-content';
+        
+        const html = `
+            <div class="prompt-section">
+                <div class="prompt-label">User Message</div>
+                <div class="prompt-text">${details.user_message}</div>
+            </div>
+            <div class="prompt-section">
+                <div class="prompt-label">System Instructions</div>
+                <div class="prompt-text system-text">${details.system_message}</div>
+            </div>
+            <div class="prompt-meta">
+                <span>Ratio: ${details.aspect_ratio}</span> • <span>Res: ${details.resolution}</span>
+            </div>
+        `;
+        
+        content.innerHTML = html;
+        messageDiv.appendChild(avatar);
+        messageDiv.appendChild(content);
         
         chatHistory.appendChild(messageDiv);
         chatHistory.scrollTop = chatHistory.scrollHeight;
@@ -808,6 +874,12 @@ document.addEventListener('DOMContentLoaded', () => {
     
     evtSource.addEventListener("image_progress", (e) => {
         const data = JSON.parse(e.data);
+        
+        // Handle prompt details (sent on first progress update)
+        if (data.prompt_details) {
+            appendPromptDetails(data.prompt_details);
+        }
+        
         thinkingIndicator.classList.remove('hidden');
         thinkingIndicator.querySelector('.text').textContent = data.status || `Generating image ${data.current}/${data.total}...`;
         

@@ -43,9 +43,10 @@ def step_impl(context, name, image_name):
         import shutil
         shutil.copy(reference_img, img_path)
     else:
-        # Fallback to fake data
+        # Fallback to fake data - MUST be valid image bytes for PIL.Image.open()
         with open(img_path, 'wb') as f:
-            f.write(b"fake image content")
+            # Minimal valid 1x1 PNG
+            f.write(b'\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89\x00\x00\x00\nIDATx\x9cc\x00\x01\x00\x00\x05\x00\x01\r\n-\xb4\x00\x00\x00\x00IEND\xaeB`\x82')
         
     if 'image_style' not in data:
         data['image_style'] = {}
@@ -61,8 +62,10 @@ def step_impl(context, prompt, deck_name):
     
     # Patch _open_folder
     with patch('deckbot.nano_banana.NanoBananaClient._open_folder'):
-        client = NanoBananaClient(pres_context)
-        candidates = client.generate_candidates(prompt)
+        # Pass root_dir explicitly so client finds the test deck
+        client = NanoBananaClient(pres_context, root_dir=context.temp_dir)
+        result = client.generate_candidates(prompt)
+        candidates = result['candidates'] if isinstance(result, dict) else result
         
         # Create fake files
         for candidate_path in candidates:
@@ -123,13 +126,16 @@ def step_impl(context, image_name):
     
     # Check if a PIL.Image object was passed in the contents
     found_image = False
+    print(f"Mock client calls: {len(mock_client.models.generate_content.call_args_list)}")
     for call in mock_client.models.generate_content.call_args_list:
         contents = call.kwargs.get('contents')
         if not contents and len(call.args) >= 2:
             contents = call.args[1]
             
+        print(f"Call contents: {contents}")
         if isinstance(contents, list):
             for item in contents:
+                print(f"Item type: {type(item)}")
                 # Check if it's a PIL Image
                 if hasattr(item, 'save') and hasattr(item, 'size'):
                     found_image = True

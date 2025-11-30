@@ -21,34 +21,11 @@ def step_impl(context, text):
 
 @when('I load the presentation "{name}" via API')
 def step_impl(context, name):
-    with patch('deckbot.webapp.PresentationManager') as MockManager:
-        instance = MockManager.return_value
-        instance.root_dir = context.temp_dir
-        
-        # If marked missing, force None return
-        if getattr(context, 'presentation_missing', False):
-             instance.get_presentation.return_value = None
-        else:
-             # Return presentation with metadata pointing to the actual created files
-             presentation = {"name": name, "description": "Test"}
-             # Add the actual created_at field if presentation directory exists
-             pres_dir = os.path.join(context.temp_dir, name)
-             if os.path.exists(pres_dir):
-                 metadata_file = os.path.join(pres_dir, "metadata.json")
-                 if os.path.exists(metadata_file):
-                     with open(metadata_file, 'r') as f:
-                         presentation.update(json.load(f))
-             instance.get_presentation.return_value = presentation
-        
-        with patch('deckbot.webapp.SessionService') as MockService:
-            mock_service_instance = MockService.return_value
-            if hasattr(context, 'expected_history'):
-                 mock_service_instance.get_history.return_value = context.expected_history
-            else:
-                 mock_service_instance.get_history.return_value = []
-            
-            with app.test_client() as client:
-                context.response = client.post('/api/load', 
+    # Don't mock - let the real PresentationManager and SessionService work
+    # Just set the environment variable to point to the temp directory
+    with patch.dict('os.environ', {'VIBE_PRESENTATION_ROOT': context.temp_dir}):
+        with app.test_client() as client:
+            context.response = client.post('/api/load', 
                                              data=json.dumps({'name': name}),
                                              content_type='application/json')
 

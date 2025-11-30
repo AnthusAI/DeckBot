@@ -115,10 +115,27 @@ def step_impl(context, name, template):
 @when('I load the presentation "{name}"')
 def step_impl(context, name):
     from deckbot.agent import Agent
+    from unittest.mock import MagicMock, patch
     
     manager = PresentationManager(root_dir=context.temp_dir) # Use temp_dir for persistence
     presentation = manager.get_presentation(name)
-    context.agent = Agent(presentation)
+    
+    # Set up mocked client for agent
+    context.mock_client = MagicMock()
+    with patch('deckbot.agent.genai.Client', return_value=context.mock_client):
+        context.agent = Agent(presentation, root_dir=context.temp_dir)
+        context.real_agent = context.agent
+        context.agent.model = "gemini-2.0-flash-exp"
+    
+    # Mock response
+    mock_response = MagicMock()
+    mock_response.candidates = [MagicMock()]
+    mock_response.candidates[0].content.parts = [MagicMock()]
+    mock_response.candidates[0].content.parts[0].text = "I understand."
+    context.mock_client.models.generate_content.return_value = mock_response
+    
+    context.responses = []
+    context.last_response = None
 
 @when('the agent previews the template "{template}"')
 def step_impl(context, template):

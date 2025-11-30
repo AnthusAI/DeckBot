@@ -1,0 +1,13 @@
+[behave]
+# Default configuration for behave
+
+# Exclude integration tests from normal runs
+# Integration tests require API keys and make real API calls
+default_tags = -integration,-manual
+
+# Use plain formatter by default
+format = plain
+
+# Show stdout/stderr for debugging
+# no_capture = true
+

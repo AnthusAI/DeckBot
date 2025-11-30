@@ -7,7 +7,7 @@ from deckbot.nano_banana import NanoBananaClient
 from deckbot.tools import PresentationTools
 
 class Agent:
-    def __init__(self, presentation_context):
+    def __init__(self, presentation_context, root_dir=None):
         self.context = presentation_context
         self.api_key = os.getenv("GOOGLE_API_KEY")
         
@@ -19,8 +19,9 @@ class Agent:
             self.api_key = os.getenv("GEMINI_API_KEY")
         
         # Initialize tools
-        self.nano_client = NanoBananaClient(presentation_context)
-        self.tools_handler = PresentationTools(presentation_context, self.nano_client)
+        # Pass root_dir to NanoBananaClient
+        self.nano_client = NanoBananaClient(presentation_context, root_dir=root_dir)
+        self.tools_handler = PresentationTools(presentation_context, self.nano_client, root_dir=root_dir)
         
         # Wrap tools for visibility and patch handler
         def w(name, original_func):
@@ -34,6 +35,7 @@ class Agent:
             w("list_files", self.tools_handler.list_files),
             w("read_file", self.tools_handler.read_file),
             w("write_file", self.tools_handler.write_file),
+            w("replace_text", self.tools_handler.replace_text),
             w("copy_file", self.tools_handler.copy_file),
             w("move_file", self.tools_handler.move_file),
             w("delete_file", self.tools_handler.delete_file),
@@ -54,19 +56,23 @@ class Agent:
         ]
 
         # Set up history file path
-        if os.environ.get('VIBE_PRESENTATION_ROOT'):
-             root = os.environ.get('VIBE_PRESENTATION_ROOT')
-        elif os.path.exists("presentations"):
-            root = os.path.abspath("presentations")
+        if root_dir:
+            root = root_dir
         else:
-            root = os.path.expanduser("~/.vibe_presentation")
+            env_root = os.environ.get('VIBE_PRESENTATION_ROOT')
+            if env_root:
+                root = env_root
+            elif os.path.exists("presentations"):
+                root = os.path.abspath("presentations")
+            else:
+                root = os.path.expanduser("~/.vibe_presentation")
         
         if not os.path.exists(root):
             os.makedirs(root, exist_ok=True)
             
         self.presentation_dir = os.path.join(root, presentation_context['name'])
         self.history_file = os.path.join(self.presentation_dir, "chat_history.jsonl")
-
+        
         # Initialize model logic
         self.model = None
         self.chat_session = None
@@ -86,6 +92,12 @@ class Agent:
             self._init_model(self._build_system_prompt())
         else:
             print("Warning: GOOGLE_API_KEY not found in environment.")
+            
+        # Subscribe to tool events for logging
+        self.tools_handler.add_tool_listener(self._on_tool_event)
+        
+        # Load history
+        self.load_history()
 
     def _build_system_prompt(self):
         # Fetch dynamic content
@@ -132,12 +144,20 @@ class Agent:
                         
                         # Handle color palette
                         if "color_palette" in opinions and opinions["color_palette"]:
-                            colors = ", ".join(opinions["color_palette"])
+                            if isinstance(opinions["color_palette"], list):
+                                colors = ", ".join(opinions["color_palette"])
+                            else:
+                                colors = str(opinions["color_palette"])
                             design_opinions_section += f"2. **Color Palette**: Prefer these colors: {colors}\n"
                         
                         # Handle typography style
                         if "typography_style" in opinions:
                             design_opinions_section += f"3. **Typography Style**: {opinions['typography_style']}\n"
+                        
+                        # Handle all other keys generically
+                        for key, value in opinions.items():
+                            if key not in ["icons", "color_palette", "typography_style"]:
+                                design_opinions_section += f"- **{key}**: {value}\n"
                         
                         design_opinions_section += "\n"
         except Exception:
@@ -184,8 +204,13 @@ Description: {self.context.get('description', '')}
 
 ## Capabilities & Tools
 - Use 'list_files' to see what slides exist.
+  - **Note**: `list_files` returns items in **reverse-chronological order** (newest first). The first file listed is the most recently created/modified.
+  - Generated image batches are stored in the `drafts/` directory. Use `list_files('drafts')` to find previously generated images.
 - Use 'read_file' to read slide content (though full context is provided above).
-- Use 'write_file' to create or update slides.
+- Use 'replace_text' to safely edit part of a file (e.g., insert an image link, change a title) without rewriting the whole file.
+  - **ALWAYS prefer 'replace_text' for small edits to existing files.**
+- Use 'write_file' to create NEW files or completely OVERWRITE existing files.
+  - **WARNING**: 'write_file' replaces the ENTIRE content of the file. If you use it on an existing file, you MUST provide the COMPLETE new content (including all existing slides), otherwise you will delete user data.
 - Use 'copy_file', 'move_file', 'delete_file', 'create_directory' to organize and manage files within the presentation.
 - Use 'generate_image' to create visuals. 
   - You can specify 'aspect_ratio' (e.g., "1:1", "16:9", "9:16", "4:3") and 'resolution' ("1K", "2K", "4K"). 
@@ -206,15 +231,57 @@ Description: {self.context.get('description', '')}
 When the user asks for an image:
 1. Call 'generate_image' with the prompt - this starts the process
 2. STOP and WAIT - the system will show candidates to the user
-3. The system will send you a [SYSTEM] message like: "[SYSTEM] User selected an image. It has been saved to `images/filename.png`. Please incorporate this image..."
+3. The system will send you a [SYSTEM] message like: "[SYSTEM] User selected an image from (batch: prompt-12345). It has been saved to `images/filename.png`. Please incorporate this image..."
+   - The batch ID (e.g., "prompt-12345") identifies which generation request this selection came from
+   - If you see a [SYSTEM] message with an old batch ID while working on a NEW image request, IGNORE the old selection
+   - Only act on [SYSTEM] messages that correspond to the CURRENT image generation batch
 4. ONLY THEN should you update the presentation files to reference that image path
-5. After incorporating, call 'compile_presentation' if appropriate to update the preview
+5. After incorporating, you MUST call 'compile_presentation' immediately to update the preview for the user. Do not ask for permission.
+
+**Important**: Each image generation creates a new batch with a unique ID. Previous [SYSTEM] messages in the history may reference old batches - these are for context only and should NOT be re-processed.
 
 ## Behavior
 - Be proactive. If the user agrees to a plan, execute it (write the files).
 - If the presentation is empty, suggest a structure.
 - If the presentation has content, offer to summarize or refine it.
 """
+
+    def _on_tool_event(self, event, data):
+        """Log tool usage to history."""
+        if event == "tool_start":
+            # Log function call
+            tool_args = data.get("kwargs", {}).copy()
+            # Gemini expects args as dict. If positional args used, we might lose info.
+            # Assuming mostly kwargs for now.
+            
+            part = types.Part(
+                function_call=types.FunctionCall(
+                    name=data["tool"],
+                    args=tool_args
+                )
+            )
+            self._log_message("model", parts=[part])
+            
+        elif event == "tool_end":
+            # Log function response
+            part = types.Part(
+                function_response=types.FunctionResponse(
+                    name=data["tool"],
+                    response={"result": data["result"]} 
+                )
+            )
+            # Role for function response
+            self._log_message("tool", parts=[part])
+            
+        elif event == "tool_error":
+             # Log error
+             part = types.Part(
+                function_response=types.FunctionResponse(
+                    name=data["tool"],
+                    response={"error": data["error"]}
+                )
+             )
+             self._log_message("tool", parts=[part])
 
     def _init_model(self, system_prompt):
         if not self.client:
@@ -259,7 +326,35 @@ When the user asks for an image:
             # Add system instruction as first message
             contents.append(types.Content(
                 role="user",
-                parts=[types.Part(text=f"[System Instructions]\n{new_system_prompt}\n\n[User Message]\n{user_input}")]
+                parts=[types.Part(text=f"[System Instructions]\n{new_system_prompt}")]
+            ))
+            
+            # Add conversation history if it exists
+            for msg in self.history:
+                # Trust the role from history
+                role = msg.get("role", "user")
+                
+                msg_parts = msg.get("parts", [])
+                content_parts = []
+                
+                for p in msg_parts:
+                    if isinstance(p, types.Part):
+                        content_parts.append(p)
+                    elif isinstance(p, str):
+                        content_parts.append(types.Part(text=p))
+                    # If other types (dict), assume already handled or ignore?
+                    # load_history ensures types.Part.
+                
+                if content_parts:
+                    contents.append(types.Content(
+                        role=role,
+                        parts=content_parts
+                    ))
+            
+            # Add current user message
+            contents.append(types.Content(
+                role="user",
+                parts=[types.Part(text=user_input)]
             ))
             
             # Make the API call with automatic function calling
@@ -306,13 +401,51 @@ When the user asks for an image:
             traceback.print_exc()
             return f"Error communicating with AI: {repr(e)}"
 
-    def _log_message(self, role, content):
+    def _log_message(self, role, content=None, parts=None):
+        # Keep SYSTEM messages in history - they provide important context
+        # about which batch an image selection came from
         try:
             with open(self.history_file, "a") as f:
-                entry = {"role": role, "content": content}
+                entry = {"role": role}
+                if parts:
+                    # Serialize parts
+                    serialized_parts = []
+                    for p in parts:
+                        if isinstance(p, types.Part):
+                            part_dict = {}
+                            if p.text: part_dict['text'] = p.text
+                            if p.function_call: 
+                                part_dict['function_call'] = {
+                                    'name': p.function_call.name,
+                                    'args': p.function_call.args
+                                }
+                            if p.function_response:
+                                part_dict['function_response'] = {
+                                    'name': p.function_response.name,
+                                    'response': p.function_response.response
+                                }
+                            serialized_parts.append(part_dict)
+                        elif isinstance(p, dict):
+                            serialized_parts.append(p)
+                        else:
+                            # Fallback for simple text in parts
+                            serialized_parts.append({"text": str(p)})
+                    entry["parts"] = serialized_parts
+                else:
+                    entry["content"] = content
                 f.write(json.dumps(entry) + "\n")
-        except Exception:
-            pass
+            
+            # Update in-memory history
+            mem_parts = []
+            if parts:
+                mem_parts = parts
+            else:
+                mem_parts = [types.Part(text=content)]
+            
+            self.history.append({"role": role, "parts": mem_parts})
+            
+        except Exception as e:
+            print(f"Error logging message: {e}")
 
     def load_history(self):
         if not os.path.exists(self.history_file):
@@ -324,20 +457,38 @@ When the user asks for an image:
                 for line in f:
                     try:
                         entry = json.loads(line)
-                        # Convert to format expected by Gemini history
-                        # parts=[text], role='user'|'model'
+                        role = entry["role"]
+                        parts = []
+                        
+                        if "parts" in entry:
+                            for p_data in entry["parts"]:
+                                part = types.Part()
+                                if "text" in p_data:
+                                    part.text = p_data["text"]
+                                if "function_call" in p_data:
+                                    fc = p_data["function_call"]
+                                    part.function_call = types.FunctionCall(
+                                        name=fc["name"],
+                                        args=fc["args"]
+                                    )
+                                if "function_response" in p_data:
+                                    fr = p_data["function_response"]
+                                    part.function_response = types.FunctionResponse(
+                                        name=fr["name"],
+                                        response=fr["response"]
+                                    )
+                                parts.append(part)
+                        elif "content" in entry:
+                             parts.append(types.Part(text=entry["content"]))
+                             
                         loaded_history.append({
-                            "role": entry["role"],
-                            "parts": [entry["content"]]
+                            "role": role,
+                            "parts": parts 
                         })
                     except json.JSONDecodeError:
                         continue
             
-            # Update internal history
             self.history = loaded_history
-            # Chat session will be created lazily when first message is sent
-            # with the loaded history included
-                
             return loaded_history
         except Exception:
             return []
