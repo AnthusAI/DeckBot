@@ -1,6 +1,7 @@
 ---
 marp: true
 theme: gaia
+size: 4:3
 paginate: true
 ---
 

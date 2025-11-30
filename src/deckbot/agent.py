@@ -39,7 +39,9 @@ class Agent:
             w("open_presentation_folder", self.tools_handler.open_presentation_folder),
             w("export_pdf", self.tools_handler.export_pdf),
             w("list_templates", self.tools_handler.list_templates),
-            w("preview_template", self.tools_handler.preview_template)
+            w("preview_template", self.tools_handler.preview_template),
+            w("get_aspect_ratio", self.tools_handler.get_aspect_ratio),
+            w("set_aspect_ratio", self.tools_handler.set_aspect_ratio)
         ]
 
         # Set up history file path
@@ -120,7 +122,12 @@ Description: {self.context.get('description', '')}
 - Use 'read_file' to read slide content (though full context is provided above).
 - Use 'write_file' to create or update slides.
 - Use 'copy_file', 'move_file', 'delete_file', 'create_directory' to organize and manage files within the presentation.
-- Use 'generate_image' to create visuals. **IMPORTANT**: When you call this, the system will generate candidates and let the user pick. DO NOT write any files that reference the image until you receive a [SYSTEM] message confirming which image was selected.
+- Use 'generate_image' to create visuals. 
+  - You can specify 'aspect_ratio' (e.g., "1:1", "16:9", "9:16", "4:3") and 'resolution' ("1K", "2K", "4K"). 
+  - Default is 1:1 2K. 
+  - Consider the slide layout when choosing aspect ratio.
+  - **IMPORTANT**: When you call this, the system will generate candidates and let the user pick. DO NOT write any files that reference the image until you receive a [SYSTEM] message confirming which image was selected.
+- Use 'get_aspect_ratio' and 'set_aspect_ratio' to manage presentation aspect ratio (e.g., "16:9", "4:3"). Changing this recompiles the deck.
 - Use 'compile_presentation' to BUILD and PREVIEW the actual slide deck (opens HTML). Use this when the user wants to "see the deck" or "preview".
 - Use 'export_pdf' to EXPORT the deck to PDF. This requires Chrome/Chromium installed on the system.
 - Use 'open_presentation_folder' to OPEN the source files for the user to edit.

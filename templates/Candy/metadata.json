@@ -4,7 +4,9 @@
   "instructions": "Use the provided background image. Keep the tone fun and energetic.",
   "image_style": {
     "prompt": "Create colorful, vibrant images.",
-    "reference_images": ["images/background.png"]
-  }
+    "reference_images": [
+      "images/background.png"
+    ]
+  },
+  "aspect_ratio": "4:3"
 }
-

@@ -90,30 +90,34 @@ Apply CSS filters directly in the alt text.
 - `opacity:0.5`
 - `drop-shadow:0,5px,10px,rgba(0,0,0,0.4)`
 
-## 3. Layout & Styling
+## 3. Themes & Customization
 
-### Themes
-- **default**: Standard white background, simple text.
-- **gaia**: Colorful, closer to Keynote/PowerPoint styles.
-- **uncover**: Centered text, minimal, good for simple messages.
+| Theme | Description | Special Classes | Key CSS Variables (for custom branding) |
+| :--- | :--- | :--- | :--- |
+| **default** | GitHub-style, simple | `invert` | (Uses standard CSS colors) |
+| **gaia** | Modern, colorful slide deck | `lead`, `gaia`, `invert` | `--color-background`, `--color-foreground`, `--color-highlight`, `--color-dimmed` |
+| **uncover** | Minimal, centered, split-screen | `invert` | `--color-background`, `--color-foreground`, `--color-highlight`, `--color-header` |
 
-### Class
-Use the `class` directive to apply preset styles.
-```markdown
-<!-- _class: lead -->
-```
-- `lead`: Centers content in the middle (great for title slides).
-- `invert`: Inverts colors (dark background, light text).
+### Styling Tips
+- **`lead`**: Use `<!-- _class: lead -->` on title slides to center everything (especially in **Gaia**).
+- **`invert`**: Instant "Dark Mode" for any theme.
+- **Custom Colors**: Override variables in a `<style>` block to match brand colors.
 
-### Scoped Styling
-You can inject standard CSS using the `<style>` tag, but keep it simple.
-
-```markdown
+```html
 <style>
-section {
-  font-size: 30px;
+:root {
+  --color-highlight: #e91e63; /* Brand Color */
+  --color-dimmed: #eee;
 }
 </style>
+```
+
+### Auto-Scaling
+Use metadata to enable automatic font scaling for headers or code blocks.
+```css
+/**
+ * @auto-scaling fittingHeader,math,code
+ */
 ```
 
 ### Header & Footer

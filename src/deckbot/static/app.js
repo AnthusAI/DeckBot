@@ -9,12 +9,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const presentationList = document.getElementById('presentation-list');
     const presentationCreate = document.getElementById('presentation-create');
     const btnCancelCreate = document.getElementById('btn-cancel-create');
-    // const currentPresentation = document.getElementById('current-presentation'); // Removed from UI
     
     // Menu items
     const menuNew = document.getElementById('menu-new');
     const menuOpen = document.getElementById('menu-open');
     const menuExport = document.getElementById('menu-export');
+    const menuPresSettings = document.getElementById('menu-pres-settings');
+    const menuSaveAs = document.getElementById('menu-save-as');
     
     // Sidebar elements
     const viewPreview = document.getElementById('view-preview');
@@ -29,6 +30,17 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnCancelPreferences = document.getElementById('btn-cancel-preferences');
     const menuPreferences = document.getElementById('menu-preferences');
     const menuAbout = document.getElementById('menu-about');
+    
+    // Presentation Settings elements
+    const presSettingsModal = document.getElementById('presentation-settings-modal');
+    const presAspectRatio = document.getElementById('pres-aspect-ratio');
+    const btnSavePresSettings = document.getElementById('btn-save-pres-settings');
+    const btnCancelPresSettings = document.getElementById('btn-cancel-pres-settings');
+
+    // Save As elements
+    const saveAsModal = document.getElementById('save-as-modal');
+    const saveAsForm = document.getElementById('save-as-form');
+    const btnCancelSaveAs = document.getElementById('btn-cancel-save-as');
     
     // Theme buttons
     const themeBtns = document.querySelectorAll('.theme-btn');
@@ -282,6 +294,109 @@ document.addEventListener('DOMContentLoaded', () => {
             openPreferences();
         });
     }
+
+    // Presentation Settings Handlers
+    if (menuPresSettings) {
+        menuPresSettings.addEventListener('click', () => {
+            if (!currentPresName) {
+                alert('Please open a presentation first.');
+                return;
+            }
+            // Load current settings
+            fetch('/api/presentation/settings')
+                .then(r => r.json())
+                .then(data => {
+                    if (data.aspect_ratio) {
+                        presAspectRatio.value = data.aspect_ratio;
+                    }
+                    presSettingsModal.classList.remove('hidden');
+                });
+        });
+    }
+
+    if (btnSavePresSettings) {
+        btnSavePresSettings.addEventListener('click', () => {
+            const aspectRatio = presAspectRatio.value;
+            
+            // Show loading state
+            appendSystemMessage('Updating aspect ratio and recompiling presentation...');
+            
+            fetch('/api/presentation/settings', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({aspect_ratio: aspectRatio})
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.error) {
+                    alert('Error saving settings: ' + data.error);
+                    appendSystemMessage('Failed to update aspect ratio.');
+                } else {
+                    presSettingsModal.classList.add('hidden');
+                    appendSystemMessage(`Aspect ratio changed to ${aspectRatio}. Reloading preview...`);
+                    // Force reload preview after a brief delay to ensure compilation finished
+                    setTimeout(() => {
+                        reloadPreview();
+                    }, 500);
+                }
+            })
+            .catch(err => {
+                alert('Error: ' + err);
+                appendSystemMessage('Error updating aspect ratio.');
+            });
+        });
+    }
+
+    if (btnCancelPresSettings) {
+        btnCancelPresSettings.addEventListener('click', () => {
+            presSettingsModal.classList.add('hidden');
+        });
+    }
+
+    // Save As Handlers
+    if (menuSaveAs) {
+        menuSaveAs.addEventListener('click', () => {
+            if (!currentPresName) {
+                alert('Please open a presentation first.');
+                return;
+            }
+            document.getElementById('save-as-name').value = currentPresName + " Copy";
+            saveAsModal.classList.remove('hidden');
+        });
+    }
+
+    if (saveAsForm) {
+        saveAsForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const newName = document.getElementById('save-as-name').value;
+            const copyImages = document.getElementById('save-as-copy-images').checked;
+            
+            fetch('/api/presentation/save-as', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({name: newName, copy_images: copyImages})
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.error) {
+                    alert('Error: ' + data.error);
+                } else {
+                    // Success - load the new presentation
+                    saveAsModal.classList.add('hidden');
+                    loadPresentation(data.name);
+                }
+            })
+            .catch(err => {
+                alert('Error: ' + err);
+            });
+        });
+    }
+
+    if (btnCancelSaveAs) {
+        btnCancelSaveAs.addEventListener('click', () => {
+            saveAsModal.classList.add('hidden');
+        });
+    }
     
     if (btnSavePreferences) {
         btnSavePreferences.addEventListener('click', () => {
@@ -326,10 +441,32 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
     
-    menuExport.addEventListener('click', () => {
-        // TODO: Implement export
-        alert('Export functionality coming soon!');
-    });
+    if (menuExport) {
+        menuExport.addEventListener('click', () => {
+            if (!currentPresName) {
+                alert('Please open a presentation first.');
+                return;
+            }
+            // Call export endpoint
+            appendSystemMessage('Starting PDF export...');
+            fetch('/api/presentation/export-pdf', {
+                method: 'POST'
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.error) {
+                    alert('Error exporting: ' + data.error);
+                    appendSystemMessage('Error exporting PDF.');
+                } else {
+                    alert(data.message);
+                    appendSystemMessage('PDF export successful.');
+                }
+            })
+            .catch(err => {
+                alert('Error: ' + err);
+            });
+        });
+    }
     
     // Mac-style keyboard shortcut: Cmd+,
     document.addEventListener('keydown', (e) => {

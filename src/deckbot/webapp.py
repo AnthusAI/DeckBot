@@ -271,3 +271,84 @@ def events():
             time.sleep(0.1)
             
     return Response(stream_with_context(stream()), mimetype='text/event-stream')
+
+@app.route('/api/presentation/settings', methods=['GET'])
+def get_presentation_settings():
+    global current_service
+    if not current_service:
+        return jsonify({"error": "No presentation loaded"}), 400
+    
+    # Refresh metadata from file
+    manager = PresentationManager()
+    if not current_service.agent.context:
+         return jsonify({"error": "Context not available"}), 500
+         
+    pres_name = current_service.agent.context['name']
+    pres = manager.get_presentation(pres_name)
+    
+    if not pres:
+        return jsonify({"error": "Presentation not found"}), 404
+        
+    return jsonify({
+        "aspect_ratio": pres.get("aspect_ratio", "4:3"),
+        "description": pres.get("description", ""),
+    })
+
+@app.route('/api/presentation/settings', methods=['POST'])
+def set_presentation_settings():
+    global current_service
+    if not current_service:
+        return jsonify({"error": "No presentation loaded"}), 400
+        
+    data = request.json
+    aspect_ratio = data.get("aspect_ratio")
+    
+    if aspect_ratio:
+        manager = PresentationManager()
+        name = current_service.agent.context['name']
+        try:
+            manager.set_presentation_aspect_ratio(name, aspect_ratio)
+            
+            # Recompile
+            import subprocess
+            presentation_dir = current_service.agent.presentation_dir
+            subprocess.run(["npx", "@marp-team/marp-cli", "deck.marp.md", "--allow-local-files"], cwd=presentation_dir, check=True)
+            
+        except Exception as e:
+             return jsonify({"error": f"Settings saved but compile failed: {e}"}), 500
+             
+    return jsonify({"message": "Settings updated"})
+
+@app.route('/api/presentation/save-as', methods=['POST'])
+def save_presentation_as():
+    global current_service
+    if not current_service:
+        return jsonify({"error": "No presentation loaded"}), 400
+        
+    data = request.json
+    new_name = data.get("name")
+    copy_images = data.get("copy_images", True)
+    
+    if not new_name:
+        return jsonify({"error": "Name is required"}), 400
+        
+    manager = PresentationManager()
+    source_name = current_service.agent.context['name']
+    
+    try:
+        manager.duplicate_presentation(source_name, new_name, copy_images=copy_images)
+        return jsonify({"message": "Presentation duplicated", "name": new_name})
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+
+@app.route('/api/presentation/export-pdf', methods=['POST'])
+def export_pdf():
+    global current_service
+    if not current_service:
+        return jsonify({"error": "No presentation loaded"}), 400
+        
+    try:
+        result = current_service.agent.tools.export_pdf()
+        return jsonify({"message": result})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500

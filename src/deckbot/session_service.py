@@ -63,7 +63,7 @@ class SessionService:
         finally:
             self._notify("thinking_end")
 
-    def _handle_agent_image_request(self, prompt: str):
+    def _handle_agent_image_request(self, prompt: str, aspect_ratio: str = "1:1", resolution: str = "2K"):
         """
         Called when agent's generate_image tool is invoked (web mode).
         
@@ -75,7 +75,7 @@ class SessionService:
         5. Notify agent with filename (handled by select_image method)
         """
         # Send the prompt as a regular message first so user knows what's happening
-        self._notify("message", {"role": "model", "content": f"I'll generate images with this prompt: **{prompt}**"})
+        self._notify("message", {"role": "model", "content": f"I'll generate images with this prompt: **{prompt}** (aspect ratio: {aspect_ratio}, resolution: {resolution})"})
         
         # Generate images in the background and notify via SSE
         import threading
@@ -93,9 +93,15 @@ class SessionService:
                 })
             
             try:
-                print(f"[IMAGE GEN] Starting generation for prompt: {prompt[:50]}...")
+                print(f"[IMAGE GEN] Starting generation for prompt: {prompt[:50]}... (aspect_ratio={aspect_ratio}, resolution={resolution})")
                 # Deterministic: Always generate 4 candidates
-                candidates = self.nano_client.generate_candidates(prompt, status_spinner=None, progress_callback=progress)
+                candidates = self.nano_client.generate_candidates(
+                    prompt, 
+                    status_spinner=None, 
+                    progress_callback=progress,
+                    aspect_ratio=aspect_ratio,
+                    resolution=resolution
+                )
                 print(f"[IMAGE GEN] Generated {len(candidates)} candidates")
                 self.pending_candidates = candidates
                 # Final notification with all candidates

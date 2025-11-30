@@ -23,6 +23,7 @@ As an agent working on this project, you **MUST** adhere to the following cycle 
 *   `features/steps/`: Python step definitions for Behave.
 *   `src/`: Source code.
 *   `tests/`: Unit tests (optional, BDD is primary).
+*   `pyproject.toml`: Project configuration and dependencies (prefer this over requirements.txt).
 
 ## Key Rules
 *   **Never write code without a failing test.**

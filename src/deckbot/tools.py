@@ -237,9 +237,14 @@ class PresentationTools:
         except Exception as e:
             return f"Error creating directory: {str(e)}"
 
-    def generate_image(self, prompt: str):
+    def generate_image(self, prompt: str, aspect_ratio: str = "1:1", resolution: str = "2K"):
         """
         Generates an image using Nano Banana.
+        
+        Args:
+            prompt: The image description
+            aspect_ratio: Aspect ratio (1:1, 16:9, 9:16, 4:3, 3:4)
+            resolution: Image resolution (1K, 2K, 4K)
         
         In CLI mode: Synchronously generates, displays, and waits for selection.
         In Web mode: Triggers async generation and returns immediately. The system will
@@ -250,7 +255,7 @@ class PresentationTools:
             # Web mode: Trigger the full async workflow
             # System will handle: generate → display UI → user selects → save → notify agent
             self.waiting_for_user_input = True  # Signal that we need to wait
-            self.on_image_generation(prompt)
+            self.on_image_generation(prompt, aspect_ratio=aspect_ratio, resolution=resolution)
             return "WAIT: Image generation started. The system is generating 4 candidates for the user to choose from. DO NOT proceed with incorporating the image yet. Wait for a [SYSTEM] message that tells you which image the user selected and its filename."
         
         # CLI mode: Synchronous interactive selection
@@ -259,7 +264,7 @@ class PresentationTools:
             self.status_spinner.stop()
             
         try:
-            candidates = self.nano_client.generate_candidates(prompt)
+            candidates = self.nano_client.generate_candidates(prompt, aspect_ratio=aspect_ratio, resolution=resolution)
             if not candidates:
                 return "Failed to generate images."
             
@@ -424,3 +429,19 @@ class PresentationTools:
                 pass
                 
         return context_str
+
+    def get_aspect_ratio(self):
+        """Returns the current presentation aspect ratio."""
+        return self.manager.get_presentation_aspect_ratio(self.context['name'])
+
+    def set_aspect_ratio(self, ratio: str):
+        """
+        Sets the presentation aspect ratio and recompiles the deck.
+        Supported ratios: 16:9, 4:3, 16:10, 3:2, 1:1
+        """
+        try:
+            self.manager.set_presentation_aspect_ratio(self.context['name'], ratio)
+            self.compile_presentation()
+            return f"Successfully set aspect ratio to {ratio} and recompiled deck."
+        except Exception as e:
+            return f"Error setting aspect ratio: {str(e)}"

@@ -20,7 +20,7 @@ dependencies = [
     "click",
     "rich",
     "behave",
-    "google-generativeai",
+    "google-genai",
     "python-dotenv",
     "requests",
     "Pillow",

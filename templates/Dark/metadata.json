@@ -4,5 +4,6 @@
   "instructions": "Use the 'invert' class for all slides. Prefer dark imagery. Keep text concise.",
   "image_style": {
     "prompt": "Create images with a clean, minimalist style suitable for dark mode. Use dark backgrounds."
-  }
+  },
+  "aspect_ratio": "4:3"
 }

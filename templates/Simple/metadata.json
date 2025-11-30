@@ -4,5 +4,6 @@
   "instructions": "Maintain a clean, minimal style. Use bullet points frequently. Keep text concise.",
   "image_style": {
     "prompt": "Create images with a clean, minimalist flat vector art style. Use a white background where possible."
-  }
+  },
+  "aspect_ratio": "4:3"
 }
