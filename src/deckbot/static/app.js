@@ -603,6 +603,69 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    function handleRichMessage(msg) {
+        /**
+         * Handle rich message types from chat history.
+         * These messages include additional metadata for UI reconstruction.
+         */
+        const messageType = msg.message_type;
+        const data = msg.data;
+        
+        switch (messageType) {
+            case 'image_request_details':
+                // Create image request message with details
+                const requestDiv = document.createElement('div');
+                requestDiv.className = 'message system';
+                requestDiv.dataset.batchSlug = data.batch_slug;
+                
+                const requestAvatar = document.createElement('div');
+                requestAvatar.className = 'message-avatar';
+                requestAvatar.innerHTML = '<i data-lucide="image" style="width: 16px; height: 16px;"></i>';
+                
+                const requestContent = document.createElement('div');
+                requestContent.className = 'message-content';
+                requestContent.innerHTML = `<p><strong>Image:</strong> ${escapeHtml(data.user_message)}</p>`;
+                
+                requestDiv.appendChild(requestAvatar);
+                requestDiv.appendChild(requestContent);
+                chatHistory.appendChild(requestDiv);
+                
+                // Add request details toggle
+                addDetailsToggleToMessage(requestDiv, data, 'image');
+                refreshIcons();
+                break;
+                
+            case 'image_candidate':
+                // Create image candidate message
+                appendImageMessage(data.image_path, data.index, data.batch_slug);
+                break;
+                
+            case 'image_selection':
+                // Mark the selected image
+                const images = chatHistory.querySelectorAll(
+                    `.message[data-batch-slug="${data.batch_slug}"] .message-image[data-index="${data.index}"]`
+                );
+                images.forEach(img => {
+                    img.classList.add('selected');
+                });
+                break;
+                
+            case 'agent_request_details':
+                // Create user message with details attached
+                const userMsg = appendMessage('user', data.user_message);
+                // Find the just-created message and add details
+                const messages = chatHistory.querySelectorAll('.message.user');
+                if (messages.length > 0) {
+                    const lastUserMessage = messages[messages.length - 1];
+                    addDetailsToggleToMessage(lastUserMessage, data, 'agent');
+                }
+                break;
+                
+            default:
+                console.warn('Unknown message type:', messageType);
+        }
+    }
+
     function loadPresentation(name) {
         fetch('/api/load', {
             method: 'POST',
@@ -622,12 +685,16 @@ document.addEventListener('DOMContentLoaded', () => {
             chatHistory.innerHTML = '';
             if (data.history) {
                 data.history.forEach(msg => {
-                    if (msg.role === 'system') {
-                        return; // Skip system messages in display
+                    // Handle rich message types
+                    if (msg.message_type) {
+                        handleRichMessage(msg);
                     }
-                    
+                    // Skip system messages without message_type (old format)
+                    else if (msg.role === 'system') {
+                        return;
+                    }
                     // Handle different part types
-                    if (msg.parts && msg.parts.length > 0) {
+                    else if (msg.parts && msg.parts.length > 0) {
                         const part = msg.parts[0];
                         
                         // Text part
@@ -717,6 +784,8 @@ document.addEventListener('DOMContentLoaded', () => {
         chatHistory.appendChild(messageDiv);
         chatHistory.scrollTop = chatHistory.scrollHeight;
         refreshIcons();
+        
+        return messageDiv;
     }
     
     function appendSystemMessage(content) {

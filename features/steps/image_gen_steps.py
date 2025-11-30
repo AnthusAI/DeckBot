@@ -133,6 +133,14 @@ def step_impl(context):
         context.service = SessionService({'name': 'test-deck'})
     
     context.service.agent = MagicMock()
+    # Set history_file to a temp file to avoid writing to stdout
+    import tempfile
+    import os
+    temp_history = tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.jsonl')
+    temp_history.close()
+    context.service.history_file = temp_history.name
+    context.service.agent.history_file = temp_history.name
+    
     context.service.pending_candidates = ["cand1.png", "cand2.png", "cand3.png", "cand4.png"]
     context.service.last_image_prompt = "test prompt"
     

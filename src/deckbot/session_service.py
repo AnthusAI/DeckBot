@@ -2,6 +2,7 @@ import os
 import json
 import threading
 from typing import Optional, List, Dict, Callable, Any
+from datetime import datetime
 from deckbot.agent import Agent
 from deckbot.nano_banana import NanoBananaClient
 
@@ -20,6 +21,9 @@ class SessionService:
         # Web-specific state
         self.pending_candidates: List[str] = []
         self.last_image_prompt: str = ""
+        
+        # Chat history file path (same as agent's history file)
+        self.history_file = getattr(self.agent, 'history_file', None)
 
         # Hook presentation updates
         if hasattr(self.agent, 'tools_handler'):
@@ -30,7 +34,7 @@ class SessionService:
             # Hook tool events
             self.agent.tools_handler.on_tool_call = self._handle_tool_event
             # Hook agent request details
-            self.agent.tools_handler.on_agent_request = lambda details: self._notify("agent_request_details", details)
+            self.agent.tools_handler.on_agent_request = self._handle_agent_request_details
 
     def subscribe(self, callback: Callable[[str, Any], None]):
         """Subscribe to events. Callback receives (event_type, data)."""
@@ -41,6 +45,11 @@ class SessionService:
         """Forward tool events to listeners."""
         self._notify(event_type, data)
 
+    def _handle_agent_request_details(self, details: Dict[str, Any]):
+        """Handle agent request details - notify and log."""
+        self._notify("agent_request_details", details)
+        self._log_agent_request_details(details)
+
     def _notify(self, event_type: str, data: Any = None):
         with self._lock:
             for listener in self.listeners:
@@ -48,6 +57,79 @@ class SessionService:
                     listener(event_type, data)
                 except Exception as e:
                     print(f"Error in listener: {e}")
+
+    def _log_rich_message(self, message_type: str, role: str, data: Dict[str, Any], content: str = None):
+        """
+        Log a rich message to chat_history.jsonl for UI reconstruction.
+        
+        Args:
+            message_type: Type of message (e.g., 'image_request_details', 'image_candidate')
+            role: Message role (user, model, system)
+            data: Message data dictionary
+            content: Optional text content for the message
+        """
+        # Skip logging if history file not available (e.g., in tests)
+        if not self.history_file:
+            return
+            
+        try:
+            entry = {
+                "role": role,
+                "message_type": message_type,
+                "timestamp": datetime.utcnow().isoformat() + "Z",
+                "data": data
+            }
+            if content:
+                entry["content"] = content
+            
+            with open(self.history_file, "a") as f:
+                f.write(json.dumps(entry) + "\n")
+        except Exception as e:
+            # Silently fail in test environments
+            pass
+
+    def _log_image_request_details(self, details: Dict[str, Any]):
+        """Log image generation request details for UI reconstruction."""
+        self._log_rich_message(
+            message_type="image_request_details",
+            role="system",
+            data=details
+        )
+
+    def _log_image_candidate(self, image_path: str, index: int, batch_slug: str):
+        """Log individual image candidate for UI reconstruction."""
+        self._log_rich_message(
+            message_type="image_candidate",
+            role="system",
+            data={
+                "image_path": image_path,
+                "index": index,
+                "batch_slug": batch_slug
+            }
+        )
+
+    def _log_image_selection(self, index: int, batch_slug: str, filename: str, saved_path: str):
+        """Log image selection for UI reconstruction."""
+        self._log_rich_message(
+            message_type="image_selection",
+            role="system",
+            data={
+                "index": index,
+                "batch_slug": batch_slug,
+                "filename": filename,
+                "saved_path": saved_path
+            }
+        )
+
+    def _log_agent_request_details(self, details: Dict[str, Any]):
+        """Log agent request details for UI reconstruction."""
+        # Store details alongside the user message
+        self._log_rich_message(
+            message_type="agent_request_details",
+            role="user",
+            data=details,
+            content=details.get('user_message', '')
+        )
 
     def send_message(self, user_input: str, status_spinner=None) -> str:
         """Send a message to the agent and get the response."""
@@ -86,17 +168,20 @@ class SessionService:
             self.last_image_prompt = prompt
             batch_slug_sent = False
             sent_candidate_count = 0  # Track how many candidates we've already sent
+            current_batch_slug = None  # Track batch slug locally across progress callbacks
             
             def progress(current, total, status, current_candidates, prompt_details=None):
-                nonlocal batch_slug_sent, sent_candidate_count
+                nonlocal batch_slug_sent, sent_candidate_count, current_batch_slug
                 
                 # Send request details on first progress update
                 if prompt_details and not batch_slug_sent:
                     # Generate batch slug for this request
                     from deckbot.nano_banana import generate_batch_slug
-                    batch_slug = generate_batch_slug(prompt)
-                    prompt_details['batch_slug'] = batch_slug
+                    current_batch_slug = generate_batch_slug(prompt)
+                    prompt_details['batch_slug'] = current_batch_slug
                     self._notify("image_request_details", prompt_details)
+                    # Log request details to chat history
+                    self._log_image_request_details(prompt_details)
                     batch_slug_sent = True
                 
                 # Send progress update
@@ -111,11 +196,15 @@ class SessionService:
                     candidates_to_send = current_candidates[sent_candidate_count:]
                     for idx, candidate_path in enumerate(candidates_to_send):
                         actual_index = sent_candidate_count + idx
+                        # Use the local batch slug that was set on first progress callback
+                        batch_slug = current_batch_slug or ''
                         self._notify("image_candidate", {
                             "image_path": candidate_path,
                             "index": actual_index,
-                            "batch_slug": getattr(self, 'current_batch_slug', '')
+                            "batch_slug": batch_slug
                         })
+                        # Log each candidate to chat history
+                        self._log_image_candidate(candidate_path, actual_index, batch_slug)
                     sent_candidate_count = len(current_candidates)
             
             try:
@@ -220,6 +309,10 @@ class SessionService:
             # Step 4: DETERMINISTIC - Always notify UI
             self._notify("image_selected", {"path": saved_path, "filename": filename})
             
+            # Log image selection to chat history
+            batch_slug = getattr(self, 'current_batch_slug', '')
+            self._log_image_selection(index, batch_slug, filename, rel_path)
+            
             # Step 5: DETERMINISTIC - Always notify agent with the filename
             # This is a system message, not a user message, telling agent what happened
             import threading
@@ -271,50 +364,57 @@ class SessionService:
         return tools
 
     def get_history(self):
-        """Get chat history."""
-        # Agent.load_history returns list of {role, parts=[Part objects]}
-        # Convert to JSON-serializable format
-        history = self.agent.load_history()
-        serializable_history = []
+        """
+        Get chat history including rich UI messages.
         
-        for entry in history:
-            serializable_entry = {"role": entry.get("role", "user")}
-            
-            # Convert parts to serializable format
-            parts = entry.get("parts", [])
-            serializable_parts = []
-            
-            for part in parts:
-                part_dict = {}
-                
-                # Check all possible part types (a part can have multiple fields)
-                if hasattr(part, 'text') and part.text:
-                    part_dict["text"] = part.text
-                if hasattr(part, 'function_call') and part.function_call:
-                    part_dict["function_call"] = {
-                        "name": part.function_call.name,
-                        "args": dict(part.function_call.args)
-                    }
-                if hasattr(part, 'function_response') and part.function_response:
-                    part_dict["function_response"] = {
-                        "name": part.function_response.name,
-                        "response": dict(part.function_response.response)
-                    }
-                
-                # If we extracted any fields, add the part
-                if part_dict:
-                    serializable_parts.append(part_dict)
-                elif isinstance(part, dict):
-                    # Already serializable
-                    serializable_parts.append(part)
-                elif isinstance(part, str):
-                    # Plain string
-                    serializable_parts.append({"text": part})
-            
-            serializable_entry["parts"] = serializable_parts
-            serializable_history.append(serializable_entry)
+        Loads directly from chat_history.jsonl to include:
+        - Regular text messages (role, parts)
+        - Rich UI messages (message_type, data)
+        """
+        if not os.path.exists(self.history_file):
+            return []
         
-        return serializable_history
+        history = []
+        try:
+            with open(self.history_file, "r") as f:
+                for line in f:
+                    try:
+                        entry = json.loads(line)
+                        
+                        # Check if this is a rich message with message_type
+                        if "message_type" in entry:
+                            # Rich message - return as-is for frontend to handle
+                            history.append(entry)
+                        else:
+                            # Regular message - convert parts if needed
+                            serializable_entry = {"role": entry.get("role", "user")}
+                            
+                            # Handle parts field
+                            if "parts" in entry:
+                                parts = entry["parts"]
+                                serializable_parts = []
+                                
+                                for part in parts:
+                                    if isinstance(part, dict):
+                                        # Already serializable
+                                        serializable_parts.append(part)
+                                    elif isinstance(part, str):
+                                        # Plain string
+                                        serializable_parts.append({"text": part})
+                                
+                                serializable_entry["parts"] = serializable_parts
+                            
+                            # Handle old-style content field
+                            if "content" in entry:
+                                serializable_entry["content"] = entry["content"]
+                            
+                            history.append(serializable_entry)
+                    except json.JSONDecodeError:
+                        continue
+        except Exception as e:
+            print(f"Error loading history: {e}")
+        
+        return history
 
     def get_state(self):
         """Get current session state."""
