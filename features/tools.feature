@@ -34,3 +34,8 @@ Feature: Agent Tools
     Then the Nano Banana client should generate candidates
     And the result should be a relative file path
 
+  Scenario: List available tools via CLI
+    Given I have a presentation named "test-deck"
+    When I run the "/tools" command
+    Then the output should contain a list of available tools
+    And the output should contain descriptions for the tools

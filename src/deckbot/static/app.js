@@ -501,8 +501,12 @@ document.addEventListener('DOMContentLoaded', () => {
     // Default view - always start with preview
     switchView('preview');
 
-    function reloadPreview() {
-        previewFrame.src = `/api/presentation/preview?t=${new Date().getTime()}`;
+    function reloadPreview(slideNumber) {
+        let url = `/api/presentation/preview?t=${new Date().getTime()}`;
+        if (slideNumber) {
+            url += `#${slideNumber}`;
+        }
+        previewFrame.src = url;
     }
 
     // ===== Template Loading =====
@@ -828,7 +832,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
     evtSource.addEventListener("presentation_updated", (e) => {
         console.log("Presentation updated, reloading preview...");
-        reloadPreview();
+        // Check if event data contains slide number
+        let slideNumber = null;
+        try {
+            if (e.data) {
+                const data = JSON.parse(e.data);
+                if (data && data.slide_number) {
+                    slideNumber = data.slide_number;
+                }
+            }
+        } catch (err) {
+            console.warn("Error parsing presentation_updated data", err);
+        }
+        
+        reloadPreview(slideNumber);
         // Switch back to preview view
         switchView('preview');
         // Clear the image gallery

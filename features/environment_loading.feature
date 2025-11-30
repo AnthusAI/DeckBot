@@ -19,3 +19,4 @@ Feature: Environment Variable Loading
     Then the agent should have the API key configured
     And the agent should not reference any legacy API key variables
 
+

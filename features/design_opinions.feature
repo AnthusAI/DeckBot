@@ -1,17 +1,20 @@
-Feature: Design Opinions
-  As a user who cares about aesthetics
-  I want the agent to use Lucide icons instead of emojis
-  So that my presentations look professional and consistent
+Feature: Template Design Opinions
+  As a user
+  I want to define design opinions in my template
+  So that the agent follows my specific aesthetic preferences per presentation
 
-  Scenario: Agent prefers Lucide icons over emojis
-    Given a new presentation
-    When I ask "Create a slide about great ideas with an icon"
-    Then the agent should generate a slide
-    And the slide should contain a Lucide icon image link
-    And the slide should not contain emojis
+  Scenario: Template defines icon preference
+    Given a template "LucideTheme" exists with design opinions
+      | key   | value  |
+      | icons | lucide |
+    And a presentation uses the "LucideTheme" template
+    When I initialize the agent
+    Then the system prompt should contain "Prefer using Lucide icons instead of emojis"
+    And the system prompt should contain "https://cdn.jsdelivr.net/npm/lucide-static"
 
-  Scenario: Agent uses Lucide icons for specific concepts
-    Given a new presentation
-    When I ask "Add a slide about 'Warning Signs' with appropriate iconography"
-    Then the slide should contain a link to "alert-triangle.svg" or "triangle-alert.svg"
+  Scenario: Template defines no specific design opinions
+    Given a template "BlankTheme" exists without design opinions
+    And a presentation uses the "BlankTheme" template
+    When I initialize the agent
+    Then the system prompt should not contain "Prefer using Lucide icons"
 

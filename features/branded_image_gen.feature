@@ -9,9 +9,9 @@ Feature: Branded Image Generation
     When I request an image "A rocket ship" for "branded-deck"
     Then the image generation prompt should contain "Use flat vector art style with blue palette"
 
-  Scenario: Generate image with reference image
+  Scenario: Generate image with style reference image
     Given a presentation "ref-deck" exists
-    And the presentation "ref-deck" has a reference image "brand_logo.png"
+    And the presentation "ref-deck" has a style reference image "brand_style.png"
     When I request an image "A meeting room" for "ref-deck"
-    Then the image generation request should include the reference image "brand_logo.png"
-
+    Then the image generation request should include the reference image "brand_style.png"
+    And the image generation prompt should contain "style reference image"

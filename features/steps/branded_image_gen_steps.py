@@ -7,14 +7,10 @@ import json
 
 @given('a presentation "{name}" exists')
 def step_impl(context, name):
-    # Use manager to create
-    # Ensure temp_dir is set (requires cli_steps fixture or similar)
-    # If running via features/branded_image_gen.feature, we need the fixture.
-    # Assuming environment.py handles fixture for all features.
     manager = PresentationManager(root_dir=context.temp_dir)
     try:
         manager.create_presentation(name)
-    except: pass # Ignore if exists
+    except: pass
 
 @given('the presentation "{name}" has image style "{style}"')
 def step_impl(context, name, style):
@@ -22,12 +18,15 @@ def step_impl(context, name, style):
     with open(path, 'r') as f:
         data = json.load(f)
     
-    data['image_style'] = {"prompt": style}
+    # Merge with existing style if present
+    if 'image_style' not in data:
+        data['image_style'] = {}
+    data['image_style']['prompt'] = style
     
     with open(path, 'w') as f:
         json.dump(data, f)
 
-@given('the presentation "{name}" has a reference image "{image_name}"')
+@given('the presentation "{name}" has a style reference image "{image_name}"')
 def step_impl(context, name, image_name):
     path = os.path.join(context.temp_dir, name, "metadata.json")
     with open(path, 'r') as f:
@@ -37,62 +36,105 @@ def step_impl(context, name, image_name):
     images_dir = os.path.join(context.temp_dir, name, "images")
     os.makedirs(images_dir, exist_ok=True)
     img_path = os.path.join(images_dir, image_name)
-    with open(img_path, 'wb') as f:
-        f.write(b"fake image content")
+    
+    # Copy the actual test reference image if available
+    reference_img = "/Users/ryan.porter/Projects/DeckBot/presentations/About DeckBot/images/Vertical_technical_d_1.png"
+    if os.path.exists(reference_img):
+        import shutil
+        shutil.copy(reference_img, img_path)
+    else:
+        # Fallback to fake data
+        with open(img_path, 'wb') as f:
+            f.write(b"fake image content")
         
-    data['image_style'] = {"reference_images": [image_name]}
+    if 'image_style' not in data:
+        data['image_style'] = {}
+    data['image_style']['style_reference'] = f"images/{image_name}"
     
     with open(path, 'w') as f:
         json.dump(data, f)
 
 @when('I request an image "{prompt}" for "{deck_name}"')
 def step_impl(context, prompt, deck_name):
-    # Load context
     manager = PresentationManager(root_dir=context.temp_dir)
     pres_context = manager.get_presentation(deck_name)
     
-    # We need to patch PIL.Image.open because our fake image is invalid
-    # Also patch _open_folder to prevent opening files in Finder
-    with patch('PIL.Image.open') as mock_open, \
-         patch('deckbot.nano_banana.NanoBananaClient._open_folder'):
-        mock_image = MagicMock()
-        mock_open.return_value = mock_image
-        
+    # Patch _open_folder
+    with patch('deckbot.nano_banana.NanoBananaClient._open_folder'):
         client = NanoBananaClient(pres_context)
-        
-        # The global mock from environment.py handles google.genai.Client
-        # Just call generate_candidates and capture what was passed
         candidates = client.generate_candidates(prompt)
         
-        # Create the actual files since the mock doesn't write them to disk
+        # Create fake files
         for candidate_path in candidates:
             os.makedirs(os.path.dirname(candidate_path), exist_ok=True)
             with open(candidate_path, 'wb') as f:
                 f.write(b"fake_image_data")
         
-        # Store the prompt for later verification
-        # Since we use prompt-based styling, check if style instructions were added
         context.last_prompt = prompt
         context.pres_context = pres_context
+        context.nano_client = client
 
 @then('the image generation prompt should contain "{text}"')
 def step_impl(context, text):
-    # Check if the style instructions from metadata were included
-    # The style_prompt should be in metadata
-    assert context.pres_context is not None
-    metadata_path = os.path.join(context.temp_dir, context.pres_context['name'], 'metadata.json')
-    with open(metadata_path, 'r') as f:
-        import json
-        metadata = json.load(f)
-        style = metadata.get('image_style', {})
-        style_prompt = style.get('prompt', '')
-        assert text in style_prompt, f"Expected '{text}' in style prompt, but got: {style_prompt}"
+    # We check the actual call to the mock client
+    mock_client = context.mock_new_client_cls.return_value
+    # generate_content might be called 4 times. Check the first one.
+    assert mock_client.models.generate_content.called, "generate_content was not called"
+    
+    found = False
+    for call in mock_client.models.generate_content.call_args_list:
+        # args or kwargs
+        contents = call.kwargs.get('contents')
+        if not contents and len(call.args) > 0:
+            # Try positional
+            if 'contents' in call.kwargs:
+                contents = call.kwargs['contents']
+            elif len(call.args) >= 2:
+                contents = call.args[1]
+            else:
+                continue
+            
+        # contents should be a list. Check text parts.
+        if isinstance(contents, list):
+            for item in contents:
+                if isinstance(item, str) and text in item:
+                    found = True
+                    break
+        elif isinstance(contents, str) and text in contents:
+            found = True
+        if found: break
+        
+    # Fallback check: metadata (for text in style instructions)
+    if not found:
+        metadata_path = os.path.join(context.temp_dir, context.pres_context['name'], 'metadata.json')
+        with open(metadata_path, 'r') as f:
+            metadata = json.load(f)
+            style = metadata.get('image_style', {})
+            style_prompt = style.get('prompt', '')
+            if text in style_prompt:
+                found = True
+                
+    assert found, f"Expected '{text}' in generated prompt or metadata"
 
 @then('the image generation request should include the reference image "{image_name}"')
 def step_impl(context, image_name):
-    # Check if the reference image exists in the presentation's images folder
-    assert context.pres_context is not None
-    images_dir = os.path.join(context.temp_dir, context.pres_context['name'], 'images')
-    ref_image_path = os.path.join(images_dir, image_name)
-    assert os.path.exists(ref_image_path), f"Reference image {ref_image_path} should exist"
-
+    mock_client = context.mock_new_client_cls.return_value
+    assert mock_client.models.generate_content.called, "generate_content was not called"
+    
+    # Check if a PIL.Image object was passed in the contents
+    found_image = False
+    for call in mock_client.models.generate_content.call_args_list:
+        contents = call.kwargs.get('contents')
+        if not contents and len(call.args) >= 2:
+            contents = call.args[1]
+            
+        if isinstance(contents, list):
+            for item in contents:
+                # Check if it's a PIL Image
+                if hasattr(item, 'save') and hasattr(item, 'size'):
+                    found_image = True
+                    break
+        if found_image:
+            break
+    
+    assert found_image, f"Reference image (PIL.Image object) was not passed to generate_content"

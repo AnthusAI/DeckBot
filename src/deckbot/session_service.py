@@ -23,7 +23,8 @@ class SessionService:
 
         # Hook presentation updates
         if hasattr(self.agent, 'tools_handler'):
-            self.agent.tools_handler.on_presentation_updated = lambda: self._notify("presentation_updated")
+            # Accept slide_number (or any data) and forward it
+            self.agent.tools_handler.on_presentation_updated = lambda data=None: self._notify("presentation_updated", data)
             # Hook image generation requests from the agent
             self.agent.tools_handler.on_image_generation = self._handle_agent_image_request
             # Hook tool events
@@ -214,6 +215,17 @@ class SessionService:
         except Exception as e:
             self._notify("error", {"message": str(e)})
             raise e
+
+    def get_tools(self) -> List[Dict[str, str]]:
+        """Get list of available tools."""
+        tools = []
+        for tool in self.agent.tools_list:
+            name = getattr(tool, '__name__', str(tool))
+            doc = getattr(tool, '__doc__', "No description available.")
+            if doc:
+                doc = doc.strip().split('\n')[0] # Use first line of docstring
+            tools.append({"name": name, "description": doc})
+        return tools
 
     def get_history(self):
         """Get chat history."""

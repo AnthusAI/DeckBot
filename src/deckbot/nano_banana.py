@@ -35,11 +35,17 @@ class NanoBananaClient:
             os.makedirs(self.drafts_dir)
 
         self.api_key = os.getenv("GOOGLE_API_KEY")
+        
+        # Check for deprecated GEMINI_API_KEY
+        if not self.api_key and os.getenv("GEMINI_API_KEY"):
+            # Silently fall back for image generation (warning already shown by Agent)
+            self.api_key = os.getenv("GEMINI_API_KEY")
+        
         self.client = None
         if self.api_key:
              self.client = genai.Client(api_key=self.api_key)
-             # Gemini 3 Pro Image Preview (Nano Banana Pro)
-             self.model_name = 'gemini-3-pro-image-preview'
+             # Imagen 3 via Gemini API
+             self.model_name = 'imagen-3.0-generate-001'
         
     def generate_candidates(self, prompt, status_spinner=None, progress_callback=None, aspect_ratio="1:1", resolution="2K"):
         """
@@ -57,9 +63,13 @@ class NanoBananaClient:
             
         console.print(f"[yellow]Generating 4 candidates for: '{prompt}'...[/yellow]")
         
-        # Load style from metadata
+        # Load style from metadata and extract theme/CSS info from deck.marp.md
         metadata_path = os.path.join(self.presentation_dir, "metadata.json")
+        deck_path = os.path.join(self.presentation_dir, "deck.marp.md")
         style_prompt = ""
+        style_reference_path = None
+        style_reference_image = None
+        theme_info = ""
         
         if os.path.exists(metadata_path):
             try:
@@ -68,12 +78,60 @@ class NanoBananaClient:
                     style = data.get("image_style", {})
                     if style.get("prompt"):
                         style_prompt = style["prompt"]
+                    
+                    # Load style reference image if specified
+                    if style.get("style_reference"):
+                        style_reference_path = os.path.join(self.presentation_dir, style["style_reference"])
+                        if os.path.exists(style_reference_path):
+                            try:
+                                style_reference_image = PIL.Image.open(style_reference_path)
+                            except Exception as e:
+                                console.print(f"[yellow]Warning: Could not load style reference image: {e}[/yellow]")
+            except Exception:
+                pass
+        
+        # Extract theme and styling information from deck.marp.md
+        if os.path.exists(deck_path):
+            try:
+                with open(deck_path, "r") as f:
+                    content = f.read()
+                    # Extract front matter (between first two ---)
+                    if content.startswith("---"):
+                        parts = content.split("---", 2)
+                        if len(parts) >= 2:
+                            front_matter = parts[1]
+                            
+                            # Extract theme
+                            import re
+                            theme_match = re.search(r'^theme:\s*(\w+)', front_matter, re.MULTILINE)
+                            if theme_match:
+                                theme_name = theme_match.group(1)
+                                theme_info = f"Marp theme: {theme_name}. "
+                            
+                            # Extract custom CSS style block
+                            style_match = re.search(r'^style:\s*\|(.+?)(?=^[a-z]+:|\Z)', front_matter, re.MULTILINE | re.DOTALL)
+                            if style_match:
+                                css_block = style_match.group(1).strip()
+                                # Extract key style info (fonts, colors)
+                                font_matches = re.findall(r'font-family:\s*[\'"]?([^;\'"]+)', css_block)
+                                color_matches = re.findall(r'color:\s*(#[0-9a-fA-F]{3,6})', css_block)
+                                
+                                if font_matches:
+                                    theme_info += f"Fonts: {', '.join(font_matches)}. "
+                                if color_matches:
+                                    theme_info += f"Colors: {', '.join(color_matches)}. "
             except Exception:
                 pass
 
         final_prompt = prompt
+        if theme_info:
+            final_prompt = f"{prompt}. {theme_info}"
         if style_prompt:
-            final_prompt = f"{prompt}. Style instructions: {style_prompt}"
+            final_prompt = f"{final_prompt} Style instructions: {style_prompt}"
+        
+        # Add style reference indication to prompt if we have one
+        if style_reference_image:
+            final_prompt = f"Using the provided style reference image as a visual style guide, generate: {final_prompt}"
         
         # Add aspect ratio instruction to prompt for Gemini native image generation
         aspect_ratio_instruction = {
@@ -113,10 +171,16 @@ class NanoBananaClient:
             if 'behave' not in sys.modules:
                 console.print(f"  Generating candidate {i+1}/4...")
             try:
+                # Build contents list - include style reference image if available
+                contents = []
+                if style_reference_image:
+                    contents.append(style_reference_image)
+                contents.append(final_prompt)
+                
                 # Use generate_content for Gemini native image generation
                 response = self.client.models.generate_content(
                     model=self.model_name,
-                    contents=[final_prompt],
+                    contents=contents,
                     config=types.GenerateContentConfig(
                         response_modalities=['IMAGE']
                     )

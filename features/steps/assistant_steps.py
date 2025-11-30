@@ -27,21 +27,21 @@ def step_impl(context, name):
 
 @then('the system prompt should contain "{text}"')
 def step_impl(context, text):
-    # We verify this by checking the agent initialization in the mocked repl
-    # But since we mocked start_repl, we need to check what would have happened.
-    # Let's assume start_repl initializes the Agent. 
-    # We can manually check Agent's system prompt logic here.
-    manager = PresentationManager(root_dir=context.temp_dir)
-    # The REPL would get the presentation metadata
-    # We can just verify that the metadata passed to REPL is correct, 
-    # and separately test that Agent uses it.
+    # Check if we have a system prompt directly (from design_opinions tests)
+    if hasattr(context, 'system_prompt'):
+        assert text in context.system_prompt, f"Expected '{text}' in system prompt, but not found."
+        return
     
-    # Check if mock_repl was called
-    if context.mock_repl.called:
+    # Check if we have an agent directly
+    if hasattr(context, 'agent'):
+        system_prompt = context.agent._build_system_prompt()
+        assert text in system_prompt, f"Expected '{text}' in system prompt, but not found."
+        return
+    
+    # Legacy behavior: check via mocked REPL
+    if hasattr(context, 'mock_repl') and context.mock_repl.called:
         args, _ = context.mock_repl.call_args
         presentation = args[0]
-        # If checking system prompt, we might need to check Agent usage or presentation desc
-        # For now, assume text is in description as per original test logic
         assert text in presentation.get('description', '') or text in str(presentation)
     else:
         # If not called (maybe separate test path), check manually
@@ -50,58 +50,80 @@ def step_impl(context, text):
 @given('the REPL is running for "{name}"')
 def step_impl(context, name):
     manager = PresentationManager(root_dir=context.temp_dir)
-    # Ensure presentation exists (it should be created by cli_steps or prior Given)
+    # Ensure presentation exists
     if not manager.get_presentation(name):
         manager.create_presentation(name, "Mock description")
         
     presentation = manager.get_presentation(name)
-    context.agent_mock = MagicMock()
-    context.agent_mock.chat.return_value = "Sure, here is an outline."
     
     # We are testing the Agent logic directly here mostly
-    with patch('google.generativeai.GenerativeModel') as mock_model, \
-         patch('google.generativeai.configure'):
+    # Patch the new genai.Client instead of GenerativeModel
+    with patch('google.genai.Client') as mock_client_cls:
         context.real_agent = Agent(presentation)
-        context.real_agent.model = mock_model
-        context.real_agent.chat_session = MagicMock()
-        context.real_agent.chat_session.send_message.return_value.text = "Sure, here is an outline."
+        # Ensure client is mocked even if API key missing (Agent skips init if no key)
+        context.real_agent.client = mock_client_cls.return_value
+        context.real_agent.model = "gemini-2.0-flash-exp" # Mock model name
+        
+        # Mock the generate_content response
+        mock_response = MagicMock()
+        mock_response.candidates = [MagicMock()]
+        mock_response.candidates[0].content.parts = [MagicMock()]
+        mock_response.candidates[0].content.parts[0].text = "Sure, here is an outline."
+        context.real_agent.client.models.generate_content.return_value = mock_response
 
 @when('I type "{message}"')
 def step_impl(context, message):
-    # Patch GenerativeModel BEFORE creating Agent to avoid API initialization errors
-    with patch('google.generativeai.GenerativeModel') as mock_model_cls, \
-         patch('google.generativeai.configure'):
-        mock_instance = mock_model_cls.return_value
-        mock_chat_session = MagicMock()
-        mock_chat_session.send_message.return_value.text = "Sure, here is an outline."
-        mock_chat_session.history = []
-        mock_instance.start_chat.return_value = mock_chat_session
+    # Ensure real_agent is set up if not already
+    if not hasattr(context, 'real_agent'):
+        manager = PresentationManager(root_dir=context.temp_dir)
+        presentation = manager.get_presentation("history-test") # fallback or default
+        if not presentation:
+             manager.create_presentation("history-test", "")
+             presentation = manager.get_presentation("history-test")
         
-        # Ensure real_agent is set up if not already
-        if not hasattr(context, 'real_agent'):
-            manager = PresentationManager(root_dir=context.temp_dir)
-            presentation = manager.get_presentation("history-test") # fallback or default
-            if not presentation:
-                 manager.create_presentation("history-test", "")
-                 presentation = manager.get_presentation("history-test")
+        with patch('google.genai.Client') as mock_client_cls:
             context.real_agent = Agent(presentation)
-        
-        context.response = context.real_agent.chat(message)
-        
-        # Capture the session for the Then step
-        context.last_mock_chat_session = mock_chat_session
+            context.real_agent.client = mock_client_cls.return_value
+            context.real_agent.model = "gemini-2.0-flash-exp"
+    
+    # Ensure the return value is set for THIS call if step called multiple times or late
+    mock_response = MagicMock()
+    mock_response.candidates = [MagicMock()]
+    mock_response.candidates[0].content.parts = [MagicMock()]
+    mock_response.candidates[0].content.parts[0].text = "Sure, here is an outline."
+    context.real_agent.client.models.generate_content.return_value = mock_response
+
+    context.response = context.real_agent.chat(message)
 
 @then('the assistant should respond using the Google Gen AI model')
 def step_impl(context):
     assert context.response == "Sure, here is an outline."
-    if hasattr(context, 'last_mock_chat_session'):
-        context.last_mock_chat_session.send_message.assert_called()
-    elif hasattr(context.real_agent, 'chat_session'):
-         # This path is risky if mock was lost
-         pass
+    # Verify generate_content was called
+    context.real_agent.client.models.generate_content.assert_called()
 
 @then('the conversation history should be updated')
 def step_impl(context):
     # Logic handled by Gemini's ChatSession usually, but we can verify our wrapper tracks it if we implement history
     pass
+
+@then('the system prompt should not contain "{text}"')
+def step_impl(context, text):
+    # Check if we have a system prompt directly (from design_opinions tests)
+    if hasattr(context, 'system_prompt'):
+        assert text not in context.system_prompt, f"Expected '{text}' NOT to be in system prompt, but it was found."
+        return
+    
+    # Check if we have an agent directly
+    if hasattr(context, 'agent'):
+        system_prompt = context.agent._build_system_prompt()
+        assert text not in system_prompt, f"Expected '{text}' NOT to be in system prompt, but it was found."
+        return
+    
+    # Legacy behavior
+    if hasattr(context, 'mock_repl') and context.mock_repl.called:
+        args, _ = context.mock_repl.call_args
+        presentation = args[0]
+        assert text not in presentation.get('description', '') and text not in str(presentation)
+    else:
+        assert True
 

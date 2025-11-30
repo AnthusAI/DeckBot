@@ -1,6 +1,7 @@
 import os
 import subprocess
 import shutil
+import re
 from functools import wraps
 from rich.console import Console
 from rich.prompt import IntPrompt
@@ -51,6 +52,8 @@ class PresentationTools:
                 if self.on_tool_call:
                     self.on_tool_call("tool_error", {"tool": tool_name, "error": str(e)})
                 raise e # Re-raise to let Gemini handle it
+        
+        # wrapped.__name__ = tool_name # Handled by @wraps
         return wrapped
 
     def list_presentations(self):
@@ -113,36 +116,25 @@ class PresentationTools:
             return f"Error: Presentation '{name}' not found."
         return presentation
 
-    def list_files(self, subdirectory: str = ""):
-        """
-        List files in the current presentation directory or a subdirectory.
-        
-        Args:
-            subdirectory: Optional subdirectory path relative to presentation root (e.g., "images", "drafts")
-        """
+    def list_files(self, directory: str = "", **kwargs):
+        """List files in the current presentation directory or a subdirectory."""
         if not os.path.exists(self.presentation_dir):
             return "Presentation directory does not exist."
-        
-        # Build the target directory path
-        if subdirectory:
-            target_dir = os.path.abspath(os.path.join(self.presentation_dir, subdirectory))
-            # Security check: ensure we stay within presentation directory
+            
+        target_dir = self.presentation_dir
+        if directory:
+            # prevent escaping presentation dir
+            target_dir = os.path.abspath(os.path.join(self.presentation_dir, directory))
             if not target_dir.startswith(os.path.abspath(self.presentation_dir)):
-                return "Error: Path outside presentation directory."
-        else:
-            target_dir = self.presentation_dir
+                 return "Error: Cannot list files outside presentation directory."
         
         if not os.path.exists(target_dir):
-            return f"Error: Directory '{subdirectory or '.'}' not found."
-        
-        if not os.path.isdir(target_dir):
-            return f"Error: '{subdirectory}' is not a directory."
-        
+             return f"Directory '{directory}' does not exist."
+
         files = os.listdir(target_dir)
         if not files:
-            return f"Directory '{subdirectory or '.'}' is empty."
-        
-        return "\n".join(sorted(files))
+            return "Directory is empty."
+        return "\n".join(files)
 
     def read_file(self, filename: str):
         """Read content of a file in the presentation directory."""
@@ -241,19 +233,22 @@ class PresentationTools:
         """
         Generates an image using Nano Banana.
         
-        Args:
-            prompt: The image description
-            aspect_ratio: Aspect ratio (1:1, 16:9, 9:16, 4:3, 3:4). If None, uses presentation's aspect ratio.
-            resolution: Image resolution (1K, 2K, 4K)
-        
         In CLI mode: Synchronously generates, displays, and waits for selection.
         In Web mode: Triggers async generation and returns immediately. The system will
                      call the agent again after user selects an image.
         """
-        # If no aspect ratio specified, use the presentation's aspect ratio
-        if aspect_ratio is None:
-            aspect_ratio = self.get_aspect_ratio() or "4:3"  # fallback to 4:3 if not set
-        
+        # Default aspect ratio to presentation setting if not provided
+        if not aspect_ratio:
+            try:
+                aspect_ratio = self.get_aspect_ratio()
+                # get_aspect_ratio might return a string error if it fails, check it
+                if aspect_ratio and "Error" in aspect_ratio:
+                    aspect_ratio = "16:9" # Fallback
+                elif not aspect_ratio:
+                    aspect_ratio = "16:9" # Fallback
+            except Exception:
+                aspect_ratio = "16:9"
+
         # Check if we have an image generation callback (indicates web mode)
         if hasattr(self, 'on_image_generation'):
             # Web mode: Trigger the full async workflow
@@ -268,6 +263,10 @@ class PresentationTools:
             self.status_spinner.stop()
             
         try:
+            # Use NanoBananaClient default or provided args
+            # The client itself needs to support these args. Assuming it does or checking next.
+            # If NanoBananaClient.generate_candidates doesn't take them, we might need to update it too.
+            # For now, let's update this signature to match the feature request.
             candidates = self.nano_client.generate_candidates(prompt, aspect_ratio=aspect_ratio, resolution=resolution)
             if not candidates:
                 return "Failed to generate images."
@@ -290,30 +289,89 @@ class PresentationTools:
             if self.status_spinner:
                 self.status_spinner.start()
 
-    def compile_presentation(self):
-        """Compiles the presentation using Marp."""
+    def go_to_slide(self, slide_number: int = None):
+        """
+        Navigates to a specific slide without recompiling.
+        
+        Args:
+            slide_number: Slide number to navigate to (1-based index).
+        """
+        if slide_number is None:
+             return "Error: slide_number is required. Please specify which slide to go to."
+
+        # Check if HTML exists
+        html_file = os.path.join(self.presentation_dir, "deck.marp.html")
+        if not os.path.exists(html_file):
+            return "Presentation has not been compiled yet. Use 'compile_presentation' first."
+            
+        # Notify listeners (Web UI)
+        if self.on_presentation_updated:
+            self.on_presentation_updated({"slide_number": slide_number})
+            # Wait a tiny bit? No, event handling is immediate usually.
+            return f"Navigating to slide {slide_number}."
+            
+        # Local Open (CLI)
+        target = f"file://{os.path.abspath(html_file)}#{slide_number}"
+        
+        # Use Popen to open without blocking
+        if os.name == 'posix':
+             subprocess.Popen(["open", target], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        elif os.name == 'nt':
+             # Windows fallback
+             os.startfile(html_file) 
+        
+        return f"Navigating to slide {slide_number}."
+
+    def compile_presentation(self, slide_number: int = None):
+        """
+        Compiles the presentation using Marp.
+        
+        Args:
+            slide_number: Optional slide number to open the presentation at (1-based index).
+        """
         console.print(f"[green]Compiling presentation in {self.presentation_dir}...[/green]")
         try:
             # Use --allow-local-files to support absolute paths or images outside working dir if needed
             subprocess.run(["npx", "@marp-team/marp-cli", "deck.marp.md", "--allow-local-files"], cwd=self.presentation_dir, check=True)
             
-            # Notify listeners
-            if self.on_presentation_updated:
-                self.on_presentation_updated()
-
-            # Try to open the HTML/PDF? Defaults to HTML
-            # If we have a callback, assume it handles UI update and skip opening if requested.
-            # For now, we only skip opening if explicitly told or maybe just always open in CLI mode?
-            # We don't know if we are in CLI or Web mode easily here without passing a flag.
-            # But if on_presentation_updated is set, it implies Web Mode usually.
-            # Let's skip opening if callback is set, assuming Web Mode handles it.
-            if self.on_presentation_updated:
-                return "Compilation successful. Presentation updated in Web UI."
-
+            # Post-process HTML to inject IDs for navigation if missing
+            # This ensures #1, #2, etc. work in both Web UI and local open
             html_file = os.path.join(self.presentation_dir, "deck.marp.html")
             if os.path.exists(html_file):
+                try:
+                    with open(html_file, 'r') as f:
+                        content = f.read()
+                    
+                    count = [0]
+                    def add_id(match):
+                        count[0] += 1
+                        tag = match.group(1)
+                        if 'id="' in tag:
+                            return tag
+                        # Insert id before the closing > or space
+                        return f'{tag[:-1]} id="{count[0]}">'
+                    
+                    new_content = re.sub(r'(<section[^>]*>)', add_id, content)
+                    
+                    if new_content != content:
+                        with open(html_file, 'w') as f:
+                            f.write(new_content)
+                except Exception as e:
+                    console.print(f"[yellow]Warning: Failed to inject slide IDs: {e}[/yellow]")
+            
+            # Use the go_to_slide logic if slide_number provided, otherwise just notify/open default
+            if slide_number:
+                return self.go_to_slide(slide_number)
+            
+            # Default compilation success path (no specific slide)
+            if self.on_presentation_updated:
+                self.on_presentation_updated({})
+                return "Compilation successful. Presentation updated in Web UI."
+
+            # Local open default
+            if os.path.exists(html_file):
                 if os.name == 'posix':
-                     subprocess.run(["open", html_file])
+                     subprocess.Popen(["open", html_file], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                 elif os.name == 'nt':
                      os.startfile(html_file)
             return "Compilation successful."
@@ -412,6 +470,23 @@ class PresentationTools:
             except Exception as e:
                 return f"Error opening folder: {e}"
 
+    def get_aspect_ratio(self):
+        """Get the current presentation's aspect ratio."""
+        try:
+            return self.manager.get_presentation_aspect_ratio(self.context['name'])
+        except Exception as e:
+            return f"Error getting aspect ratio: {str(e)}"
+    
+    def set_aspect_ratio(self, aspect_ratio: str):
+        """Set the presentation's aspect ratio and recompile the deck."""
+        try:
+            self.manager.set_presentation_aspect_ratio(self.context['name'], aspect_ratio)
+            # Recompile the deck
+            self.compile_presentation()
+            return f"Aspect ratio changed to {aspect_ratio} and deck recompiled."
+        except Exception as e:
+            return f"Error setting aspect ratio: {str(e)}"
+
     def get_full_context(self):
         """Reads all markdown files in the presentation to build full context."""
         if not os.path.exists(self.presentation_dir):
@@ -433,19 +508,3 @@ class PresentationTools:
                 pass
                 
         return context_str
-
-    def get_aspect_ratio(self):
-        """Returns the current presentation aspect ratio."""
-        return self.manager.get_presentation_aspect_ratio(self.context['name'])
-
-    def set_aspect_ratio(self, ratio: str):
-        """
-        Sets the presentation aspect ratio and recompiles the deck.
-        Supported ratios: 16:9, 4:3, 16:10, 3:2, 1:1
-        """
-        try:
-            self.manager.set_presentation_aspect_ratio(self.context['name'], ratio)
-            self.compile_presentation()
-            return f"Successfully set aspect ratio to {ratio} and recompiled deck."
-        except Exception as e:
-            return f"Error setting aspect ratio: {str(e)}"

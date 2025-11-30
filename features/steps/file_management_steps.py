@@ -113,5 +113,8 @@ def step_impl(context, subdirectory):
 
 @then('the file list result should contain "{text}"')
 def step_impl(context, text):
-    assert text in context.last_result, f"Expected '{text}' in result, got: {context.last_result}"
+    result = getattr(context, 'last_result', None)
+    error = getattr(context, 'last_error', None)
+    assert result is not None, f"Result missing. Error was: {error}"
+    assert text in result, f"Expected '{text}' in result, got: {result}"
 

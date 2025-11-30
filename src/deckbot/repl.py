@@ -60,6 +60,13 @@ def start_repl(presentation, resume=False, new_presentation=False):
         
         if user_input.lower() in ['exit', 'quit', '/exit', '/quit', '/q']:
             break
+            
+        if user_input.lower() == '/tools':
+            console.print("[bold]Available Tools:[/bold]")
+            tools = service.get_tools()
+            for tool in tools:
+                console.print(f"- [bold cyan]{tool['name']}[/bold cyan]: {tool['description']}")
+            continue
         
         console.print() # Vertical whitespace
         
