@@ -89,3 +89,4 @@ class StateManager:
         """Get all state."""
         return self._read_config()
 
+

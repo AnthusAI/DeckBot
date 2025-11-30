@@ -41,3 +41,4 @@ Feature: Image Generation Integration Test
     And fallback images should be created for failed requests
     And the system should report the actual success count
 
+

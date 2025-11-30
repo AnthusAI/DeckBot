@@ -32,3 +32,4 @@ Feature: Chat History Display
     And function calls should be represented
     And function responses should be included in history data
 
+

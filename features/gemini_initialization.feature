@@ -16,3 +16,4 @@ Feature: Gemini Model Initialization
     Then the agent should warn about missing API key
     And the agent should not crash
 
+

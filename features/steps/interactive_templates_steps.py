@@ -25,5 +25,6 @@ def step_impl(context, name):
     # Execute here since this is the last step
     with patch('deckbot.cli.start_repl') as mock_repl:
         with patch('rich.prompt.Prompt.ask', side_effect=context.cli_inputs) as mock_prompt:
-             result = context.runner.invoke(cli, args=[], env={'VIBE_PRESENTATION_ROOT': context.temp_dir})
+             # Pass --text flag to use interactive text mode instead of web UI
+             result = context.runner.invoke(cli, args=['--text'], env={'VIBE_PRESENTATION_ROOT': context.temp_dir})
              context.result = result

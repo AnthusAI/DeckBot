@@ -3,7 +3,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const chatHistory = document.getElementById('chat-history');
     const messageInput = document.getElementById('message-input');
     const btnSend = document.getElementById('btn-send');
-    const imageGallery = document.getElementById('image-gallery');
     const thinkingIndicator = document.getElementById('thinking-indicator');
     const presentationSelect = document.getElementById('presentation-select');
     const presentationList = document.getElementById('presentation-list');
@@ -20,9 +19,7 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Sidebar elements
     const viewPreview = document.getElementById('view-preview');
-    const viewImages = document.getElementById('view-images');
     const previewFrame = document.getElementById('preview-frame');
-    const btnCloseImages = document.getElementById('btn-close-images');
     
     // Preferences elements
     const preferencesModal = document.getElementById('preferences-modal');
@@ -51,6 +48,8 @@ document.addEventListener('DOMContentLoaded', () => {
     
     let currentPresName = "";
     let currentColorTheme = "miami"; // Default
+    let selectedImageIndex = null; // Track which image candidate is selected
+    let currentBatchSlug = null; // Track current image generation batch
 
     // ===== Theme Management =====
     function setTheme(theme, saveToBackend = true) {
@@ -509,23 +508,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // ===== View Switching =====
-    function switchView(viewName) {
-        if (viewName === 'preview') {
-            viewPreview.style.display = 'block';
-            viewImages.style.display = 'none';
-        } else if (viewName === 'images') {
-            viewImages.style.display = 'flex';
-            viewPreview.style.display = 'none';
-        }
-    }
-    
-    btnCloseImages.addEventListener('click', () => {
-        switchView('preview');
-    });
-
-    // Default view - always start with preview
-    switchView('preview');
+    // Sidebar always shows preview now (no view switching needed)
 
     function reloadPreview(slideNumber) {
         let url = `/api/presentation/preview?t=${new Date().getTime()}`;
@@ -631,9 +614,6 @@ document.addEventListener('DOMContentLoaded', () => {
             currentPresName = name;
             // currentPresentation.textContent = name; // Element removed from UI
             presentationSelect.classList.add('hidden');
-            
-            // Always show preview when loading a presentation
-            switchView('preview');
             
             // Load preview
             reloadPreview();
@@ -759,45 +739,158 @@ document.addEventListener('DOMContentLoaded', () => {
         refreshIcons();
     }
 
-    function appendPromptDetails(details) {
+    function appendImageMessage(imagePath, index, batchSlug) {
         const messageDiv = document.createElement('div');
-        messageDiv.className = 'message system prompt-details';
+        messageDiv.className = 'message system';
+        messageDiv.dataset.imageIndex = index;
+        messageDiv.dataset.batchSlug = batchSlug;
         
         const avatar = document.createElement('div');
         avatar.className = 'message-avatar';
-        avatar.innerHTML = '<i data-lucide="cpu" style="width: 16px; height: 16px;"></i>';
+        avatar.innerHTML = '<i data-lucide="image" style="width: 16px; height: 16px;"></i>';
         
-        const content = document.createElement('div');
-        content.className = 'message-content';
+        const messageContent = document.createElement('div');
+        messageContent.className = 'message-content';
         
-        const html = `
-            <div class="prompt-section">
-                <div class="prompt-label">User Message</div>
-                <div class="prompt-text">${details.user_message}</div>
-            </div>
-            <div class="prompt-section">
-                <div class="prompt-label">System Instructions</div>
-                <div class="prompt-text system-text">${details.system_message}</div>
-            </div>
-            <div class="prompt-meta">
-                <span>Ratio: ${details.aspect_ratio}</span> • <span>Res: ${details.resolution}</span>
-            </div>
-        `;
+        const imageWrapper = document.createElement('div');
+        imageWrapper.className = 'message-image';
+        imageWrapper.dataset.index = index;
         
-        content.innerHTML = html;
+        const img = document.createElement('img');
+        img.src = `/api/serve-image?path=${encodeURIComponent(imagePath)}`;
+        img.alt = `Candidate ${index + 1}`;
+        
+        imageWrapper.appendChild(img);
+        imageWrapper.onclick = () => selectImageCandidate(index, imageWrapper);
+        
+        messageContent.appendChild(imageWrapper);
         messageDiv.appendChild(avatar);
-        messageDiv.appendChild(content);
+        messageDiv.appendChild(messageContent);
         
         chatHistory.appendChild(messageDiv);
         chatHistory.scrollTop = chatHistory.scrollHeight;
         refreshIcons();
     }
 
+    function selectImageCandidate(index, imageElement) {
+        // Mark this image as selected visually
+        document.querySelectorAll('.message-image').forEach(img => {
+            img.classList.remove('selected');
+        });
+        imageElement.classList.add('selected');
+        selectedImageIndex = index;
+        
+        // Send selection to backend
+        fetch('/api/images/select', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({index})
+        })
+        .then(r => r.json())
+        .then(data => {
+            console.log('Image selected:', data);
+        });
+    }
+
+    function createRequestDetailsSection(details, requestType) {
+        const detailsDiv = document.createElement('div');
+        detailsDiv.className = 'request-details';
+        
+        if (requestType === 'image') {
+            // Don't show user prompt in details since it's already visible in the message
+            detailsDiv.innerHTML = `
+                <div class="detail-section">
+                    <div class="detail-label">System Instructions</div>
+                    <div class="detail-content">${escapeHtml(details.system_message)}</div>
+                </div>
+                <div class="detail-section">
+                    <div class="detail-meta">
+                        <div class="detail-meta-item">
+                            <i data-lucide="maximize" style="width: 14px; height: 14px;"></i>
+                            <span>${details.aspect_ratio}</span>
+                        </div>
+                        <div class="detail-meta-item">
+                            <i data-lucide="monitor" style="width: 14px; height: 14px;"></i>
+                            <span>${details.resolution}</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+        } else if (requestType === 'agent') {
+            let metaHtml = '';
+            if (details.model) {
+                metaHtml = `
+                    <div class="detail-section">
+                        <div class="detail-meta">
+                            <div class="detail-meta-item">
+                                <i data-lucide="cpu" style="width: 14px; height: 14px;"></i>
+                                <span>${escapeHtml(details.model)}</span>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            detailsDiv.innerHTML = `
+                <div class="detail-section">
+                    <div class="detail-label">User Message</div>
+                    <div class="detail-content">${escapeHtml(details.user_message)}</div>
+                </div>
+                <div class="detail-section">
+                    <div class="detail-label">System Prompt</div>
+                    <div class="detail-content">${escapeHtml(details.system_prompt)}</div>
+                </div>
+                ${metaHtml}
+            `;
+        }
+        
+        refreshIcons();
+        return detailsDiv;
+    }
+
+    function addDetailsToggleToMessage(messageDiv, details, requestType) {
+        // Find or create message header
+        let messageContent = messageDiv.querySelector('.message-content');
+        if (!messageContent) return;
+        
+        // Create header if it doesn't exist
+        let header = messageContent.querySelector('.message-header');
+        if (!header) {
+            header = document.createElement('div');
+            header.className = 'message-header';
+            messageContent.insertBefore(header, messageContent.firstChild);
+        }
+        
+        // Create toggle button
+        const toggleBtn = document.createElement('button');
+        toggleBtn.className = 'details-toggle';
+        toggleBtn.innerHTML = '<i data-lucide="chevron-down" style="width: 14px; height: 14px;"></i><span>Details</span>';
+        
+        // Create details section
+        const detailsSection = createRequestDetailsSection(details, requestType);
+        messageContent.appendChild(detailsSection);
+        
+        // Toggle functionality
+        toggleBtn.onclick = () => {
+            const isExpanded = detailsSection.classList.toggle('expanded');
+            toggleBtn.classList.toggle('expanded', isExpanded);
+        };
+        
+        header.appendChild(toggleBtn);
+        refreshIcons();
+    }
+
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
     function sendMessage() {
         const text = messageInput.value.trim();
         if (!text) return;
 
-        appendMessage('user', text);
+        // Don't append immediately - let it come through SSE
         messageInput.value = '';
 
         fetch('/api/chat', {
@@ -821,34 +914,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // ===== Image Gallery =====
-    function updateGallery(candidates) {
-        imageGallery.innerHTML = '';
-        candidates.forEach((path, idx) => {
-            const card = document.createElement('div');
-            card.className = 'image-card';
-            card.onclick = () => selectImage(idx);
-            
-            const img = document.createElement('img');
-            img.src = `/api/serve-image?path=${encodeURIComponent(path)}`;
-            
-            card.appendChild(img);
-            imageGallery.appendChild(card);
-        });
-        refreshIcons();
-    }
-
-    function selectImage(index) {
-        fetch('/api/images/select', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({index})
-        })
-        .then(r => r.json())
-        .then(data => {
-            console.log('Image selected:', data);
-        });
-    }
 
     // ===== Server-Sent Events =====
     const evtSource = new EventSource('/events');
@@ -872,37 +937,65 @@ document.addEventListener('DOMContentLoaded', () => {
         thinkingIndicator.classList.add('hidden');
     });
     
+    evtSource.addEventListener("image_request_details", (e) => {
+        const data = JSON.parse(e.data);
+        // Store batch slug for this generation
+        currentBatchSlug = data.batch_slug;
+        
+        // Create a system message showing the user prompt and generating status
+        const messageDiv = document.createElement('div');
+        messageDiv.className = 'message system';
+        messageDiv.dataset.batchSlug = data.batch_slug;
+        
+        const avatar = document.createElement('div');
+        avatar.className = 'message-avatar';
+        avatar.innerHTML = '<i data-lucide="image" style="width: 16px; height: 16px;"></i>';
+        
+        const messageContent = document.createElement('div');
+        messageContent.className = 'message-content';
+        // Show user prompt by default, with "Generating..." status
+        messageContent.innerHTML = `<p><strong>Image:</strong> ${escapeHtml(data.user_message)}</p><p class="text-muted">Generating images...</p>`;
+        
+        messageDiv.appendChild(avatar);
+        messageDiv.appendChild(messageContent);
+        
+        chatHistory.appendChild(messageDiv);
+        chatHistory.scrollTop = chatHistory.scrollHeight;
+        
+        // Add request details to this message (system instructions will be in collapsed section)
+        addDetailsToggleToMessage(messageDiv, data, 'image');
+        refreshIcons();
+    });
+
+    evtSource.addEventListener("image_candidate", (e) => {
+        const data = JSON.parse(e.data);
+        appendImageMessage(data.image_path, data.index, data.batch_slug);
+    });
+
     evtSource.addEventListener("image_progress", (e) => {
         const data = JSON.parse(e.data);
-        
-        // Handle prompt details (sent on first progress update)
-        if (data.prompt_details) {
-            appendPromptDetails(data.prompt_details);
-        }
-        
         thinkingIndicator.classList.remove('hidden');
         thinkingIndicator.querySelector('.text').textContent = data.status || `Generating image ${data.current}/${data.total}...`;
-        
-        // Update gallery with current candidates (shows images as they're generated)
-        if (data.candidates && data.candidates.length > 0) {
-            updateGallery(data.candidates);
-        }
-        
-        // Switch to images view
-        switchView('images');
     });
 
     evtSource.addEventListener("images_ready", (e) => {
         thinkingIndicator.classList.add('hidden');
         thinkingIndicator.querySelector('.text').textContent = "Thinking...";
-        const data = JSON.parse(e.data);
-        updateGallery(data.candidates);
     });
     
     evtSource.addEventListener("image_selected", (e) => {
         const data = JSON.parse(e.data);
-        appendMessage('model', `**Image Saved**: ${data.filename}`);
-        imageGallery.innerHTML = '<p class="placeholder">Image saved. Incorporating into presentation...</p>';
+        appendSystemMessage(`Image saved: ${data.filename}`);
+    });
+
+    evtSource.addEventListener("agent_request_details", (e) => {
+        const data = JSON.parse(e.data);
+        // Find the most recent user message and add details to it
+        const messages = chatHistory.querySelectorAll('.message.user');
+        if (messages.length > 0) {
+            const lastUserMessage = messages[messages.length - 1];
+            addDetailsToggleToMessage(lastUserMessage, data, 'agent');
+        }
     });
 
     evtSource.addEventListener("tool_start", (e) => {
@@ -944,10 +1037,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         reloadPreview(slideNumber);
-        // Switch back to preview view
-        switchView('preview');
-        // Clear the image gallery
-        imageGallery.innerHTML = '<p class="placeholder">No images generated yet.</p>';
     });
 
     // ===== Initial Load =====

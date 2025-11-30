@@ -29,6 +29,8 @@ class SessionService:
             self.agent.tools_handler.on_image_generation = self._handle_agent_image_request
             # Hook tool events
             self.agent.tools_handler.on_tool_call = self._handle_tool_event
+            # Hook agent request details
+            self.agent.tools_handler.on_agent_request = lambda details: self._notify("agent_request_details", details)
 
     def subscribe(self, callback: Callable[[str, Any], None]):
         """Subscribe to events. Callback receives (event_type, data)."""
@@ -49,6 +51,8 @@ class SessionService:
 
     def send_message(self, user_input: str, status_spinner=None) -> str:
         """Send a message to the agent and get the response."""
+        # Emit user message so it appears in chat
+        self._notify("message", {"role": "user", "content": user_input})
         self._notify("thinking_start")
         try:
             response = self.agent.chat(user_input, status_spinner=status_spinner)
@@ -70,31 +74,49 @@ class SessionService:
         
         This is the deterministic system workflow:
         1. Generate 4 candidates (with progress updates)
-        2. Display in UI sidebar
+        2. Display each image in chat as individual messages
         3. Wait for user selection (handled by select_image method)
         4. Save selected image (handled by select_image method)
         5. Notify agent with filename (handled by select_image method)
         """
-        # Send the prompt as a regular message first so user knows what's happening
-        self._notify("message", {"role": "model", "content": f"I'll generate images with this prompt: **{prompt}** (aspect ratio: {aspect_ratio}, resolution: {resolution})"})
-        
         # Generate images in the background and notify via SSE
         import threading
         import traceback
         def _generate():
             self.last_image_prompt = prompt
+            batch_slug_sent = False
+            sent_candidate_count = 0  # Track how many candidates we've already sent
             
             def progress(current, total, status, current_candidates, prompt_details=None):
-                # Update progress AND show candidates as they're generated
-                payload = {
+                nonlocal batch_slug_sent, sent_candidate_count
+                
+                # Send request details on first progress update
+                if prompt_details and not batch_slug_sent:
+                    # Generate batch slug for this request
+                    from deckbot.nano_banana import generate_batch_slug
+                    batch_slug = generate_batch_slug(prompt)
+                    prompt_details['batch_slug'] = batch_slug
+                    self._notify("image_request_details", prompt_details)
+                    batch_slug_sent = True
+                
+                # Send progress update
+                self._notify("image_progress", {
                     "current": current, 
                     "total": total, 
-                    "status": status,
-                    "candidates": current_candidates  # Show images incrementally
-                }
-                if prompt_details:
-                    payload["prompt_details"] = prompt_details
-                self._notify("image_progress", payload)
+                    "status": status
+                })
+                
+                # Send only NEW candidates (ones we haven't sent yet)
+                if current_candidates:
+                    candidates_to_send = current_candidates[sent_candidate_count:]
+                    for idx, candidate_path in enumerate(candidates_to_send):
+                        actual_index = sent_candidate_count + idx
+                        self._notify("image_candidate", {
+                            "image_path": candidate_path,
+                            "index": actual_index,
+                            "batch_slug": getattr(self, 'current_batch_slug', '')
+                        })
+                    sent_candidate_count = len(current_candidates)
             
             try:
                 print(f"[IMAGE GEN] Starting generation for prompt: {prompt[:50]}... (aspect_ratio={aspect_ratio}, resolution={resolution})")
@@ -114,8 +136,8 @@ class SessionService:
                 self.pending_candidates = candidates
                 self.current_batch_slug = batch_slug
                 
-                # Final notification with all candidates
-                self._notify("images_ready", {"candidates": candidates, "prompt": prompt, "batch_slug": batch_slug})
+                # Final notification
+                self._notify("images_ready", {"batch_slug": batch_slug})
                 print(f"[IMAGE GEN] Notified images_ready")
             except Exception as e:
                 print(f"[IMAGE GEN ERROR] {type(e).__name__}: {e}")

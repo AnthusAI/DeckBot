@@ -35,29 +35,22 @@ Feature: Web UI
     Then the response should contain "history"
     And the response should contain "Mock user message"
 
-  Scenario: Image View Only Shows During Generation
-    Given a presentation "ui-view-test" exists
-    And I load the presentation "ui-view-test" via API
-    When I check the initial UI state
-    Then the preview view should be visible
-    And the image selection view should be hidden
-
-  Scenario: Image View Appears During Generation
+  Scenario: Images Appear in Chat During Generation
     Given a presentation "ui-image-gen-test" exists
     And I load the presentation "ui-image-gen-test" via API
     When image generation starts
-    Then the image selection view should become visible
-    And the preview view should be hidden
+    Then image request details should appear in chat
+    And individual image candidates should appear as chat messages
+    And the preview view should remain visible
 
-  Scenario: Image View Returns to Preview After Selection
+  Scenario: User Selects Image from Chat
     Given a presentation "ui-selection-test" exists
     And I load the presentation "ui-selection-test" via API
-    And image generation starts
-    And the image selection view is visible
-    When the user selects an image
-    And the presentation is compiled
-    Then the preview view should become visible
-    And the image selection view should be hidden
+    And image candidates are displayed in chat
+    When the user clicks on an image candidate
+    Then the image should be marked as selected
+    And the selection should be sent to the backend
+    And the preview view should remain visible
 
   Scenario: Theme Persistence
     Given I set the theme to "light"
@@ -86,7 +79,6 @@ Feature: Web UI
     When I create a presentation named "web-created" via the UI
     Then the presentation "web-created" should exist
     And the preview should load automatically
-    And the image selection view should be hidden
 
   Scenario: Color Theme Selection - Miami Theme
     Given I open the preferences dialog

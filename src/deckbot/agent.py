@@ -231,14 +231,15 @@ Description: {self.context.get('description', '')}
 When the user asks for an image:
 1. Call 'generate_image' with the prompt - this starts the process
 2. STOP and WAIT - the system will show candidates to the user
-3. The system will send you a [SYSTEM] message like: "[SYSTEM] User selected an image from (batch: prompt-12345). It has been saved to `images/filename.png`. Please incorporate this image..."
-   - The batch ID (e.g., "prompt-12345") identifies which generation request this selection came from
-   - If you see a [SYSTEM] message with an old batch ID while working on a NEW image request, IGNORE the old selection
-   - Only act on [SYSTEM] messages that correspond to the CURRENT image generation batch
+3. The system will send you a SYSTEM message indicating which image was selected, including:
+   - A batch ID identifying which generation request this selection came from
+   - The file path where the image was saved (e.g., images/selected_image.png)
+   - If you see a SYSTEM message with an old batch ID while working on a NEW image request, IGNORE the old selection
+   - Only act on SYSTEM messages that correspond to the CURRENT image generation batch
 4. ONLY THEN should you update the presentation files to reference that image path
 5. After incorporating, you MUST call 'compile_presentation' immediately to update the preview for the user. Do not ask for permission.
 
-**Important**: Each image generation creates a new batch with a unique ID. Previous [SYSTEM] messages in the history may reference old batches - these are for context only and should NOT be re-processed.
+**Important**: Each image generation creates a new batch with a unique ID. Previous SYSTEM messages in the history may reference old batches - these are for context only and should NOT be re-processed.
 
 ## Behavior
 - Be proactive. If the user agrees to a plan, execute it (write the files).
@@ -356,6 +357,15 @@ When the user asks for an image:
                 role="user",
                 parts=[types.Part(text=user_input)]
             ))
+            
+            # Emit request details if callback is set (web mode)
+            if hasattr(self.tools_handler, 'on_agent_request'):
+                request_details = {
+                    'user_message': user_input,
+                    'system_prompt': new_system_prompt,
+                    'model': self.model_name
+                }
+                self.tools_handler.on_agent_request(request_details)
             
             # Make the API call with automatic function calling
             try:

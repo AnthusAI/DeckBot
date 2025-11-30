@@ -13,3 +13,4 @@ Feature: List Drafts
     Then the list should start with "newest_file.txt"
     And the list should contain "newer_folder" after "newest_file.txt"
     And the list should contain "old_file.txt" after "newer_folder"
+
