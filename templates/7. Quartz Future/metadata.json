@@ -1,0 +1,25 @@
+{
+  "name": "7. Quartz Future",
+  "description": "Futuristic dark theme with Outfit and Manrope fonts",
+  "instructions": "Create a futuristic, sci-fi inspired aesthetic with Outfit headings and Manrope body text. Use violet (#7C4DFF) for primary accents and cyan (#26C6DA) for highlights. Perfect for innovation and future-focused content.",
+  "typography": {
+    "heading_font": "Outfit",
+    "body_font": "Manrope"
+  },
+  "colors": {
+    "text": "#E0E0E0",
+    "background": "#101014",
+    "accents": ["#7C4DFF", "#26C6DA"]
+  },
+  "design_opinions": {
+    "icons": "lucide",
+    "color_palette": ["#E0E0E0", "#7C4DFF", "#26C6DA"],
+    "typography_style": "futuristic and clean"
+  },
+  "image_style": {
+    "prompt": "Create futuristic, sci-fi inspired images with sleek geometric shapes and tech aesthetics. Use violet (#7C4DFF) and cyan (#26C6DA) accents on deep dark backgrounds (#101014). Style should feel innovative, cutting-edge, and forward-thinking.",
+    "style_reference": null
+  },
+  "aspect_ratio": "16:9"
+}
+

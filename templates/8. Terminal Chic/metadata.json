@@ -1,0 +1,25 @@
+{
+  "name": "8. Terminal Chic",
+  "description": "Terminal-inspired dark theme with system fonts",
+  "instructions": "Create a terminal/code editor inspired aesthetic with system UI fonts. Use green (#66BB6A) for success/primary elements and yellow (#FFDD33) for warnings/highlights. Perfect for developer-focused content with a retro-modern feel.",
+  "typography": {
+    "heading_font": "System-UI",
+    "body_font": "Segoe UI"
+  },
+  "colors": {
+    "text": "#F2F2F2",
+    "background": "#0A0A0A",
+    "accents": ["#66BB6A", "#FFDD33"]
+  },
+  "design_opinions": {
+    "icons": "lucide",
+    "color_palette": ["#F2F2F2", "#66BB6A", "#FFDD33"],
+    "typography_style": "terminal and technical"
+  },
+  "image_style": {
+    "prompt": "Create terminal/code editor inspired images with monospace aesthetics and command-line vibes. Use green (#66BB6A) and yellow (#FFDD33) accents on black backgrounds (#0A0A0A). Style should feel like a modern developer terminal with retro influences.",
+    "style_reference": null
+  },
+  "aspect_ratio": "16:9"
+}
+

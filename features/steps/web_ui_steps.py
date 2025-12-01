@@ -390,7 +390,7 @@ def step_impl(context, name):
 def step_impl(context, name):
     context.presentation_missing = True
 
-@given('templates "Light", "Dark", and "Candy" exist')
+@given('templates "1. Alpine Minimal", "2. Editorial Modern", and "5. Midnight Grid" exist')
 def step_impl(context):
     pass
 
@@ -399,9 +399,9 @@ def step_impl(context):
     with patch('deckbot.webapp.PresentationManager') as MockManager:
         instance = MockManager.return_value
         instance.list_templates.return_value = [
-            {"name": "Light", "description": "Light Theme"},
-            {"name": "Dark", "description": "Dark Theme"},
-            {"name": "Candy", "description": "Candy Theme"}
+            {"name": "1. Alpine Minimal", "description": "Clean minimalist design with Inter and Source Serif Pro fonts"},
+            {"name": "2. Editorial Modern", "description": "Editorial design with Montserrat and Merriweather fonts"},
+            {"name": "5. Midnight Grid", "description": "Dark theme with Work Sans and Inter fonts"}
         ]
         with app.test_client() as client:
             context.response = client.get('/api/templates')

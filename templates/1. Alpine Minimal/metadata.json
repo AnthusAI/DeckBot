@@ -1,0 +1,25 @@
+{
+  "name": "1. Alpine Minimal",
+  "description": "Clean minimalist design with Inter and Source Serif Pro fonts",
+  "instructions": "Maintain a clean, minimal aesthetic with crisp typography. Use blue (#2F80ED) for primary accents and soft red (#EB5757) sparingly for emphasis. Keep layouts spacious and uncluttered.",
+  "typography": {
+    "heading_font": "Inter",
+    "body_font": "Source Serif Pro"
+  },
+  "colors": {
+    "text": "#0A0A0A",
+    "background": "#FFFFFF",
+    "accents": ["#2F80ED", "#EB5757"]
+  },
+  "design_opinions": {
+    "icons": "lucide",
+    "color_palette": ["#0A0A0A", "#2F80ED", "#EB5757"],
+    "typography_style": "crisp and minimal"
+  },
+  "image_style": {
+    "prompt": "Create clean, minimalist images with simple geometric shapes and a modern aesthetic. Use blue (#2F80ED) as the primary accent color on a white background. Style should be clean, professional, and uncluttered.",
+    "style_reference": null
+  },
+  "aspect_ratio": "16:9"
+}
+

@@ -133,12 +133,15 @@
                 <form id="create-form">
                     <input type="text" id="new-pres-name" placeholder="Presentation name" required>
                     <input type="text" id="new-pres-desc" placeholder="Description (optional)">
-                    <select id="new-pres-template">
+                    <select id="new-pres-template" style="margin-bottom: 15px;">
                         <option value="">No template</option>
                     </select>
+                    <div id="template-display" class="hidden" style="margin-bottom: 15px; padding: 10px; background: hsl(var(--muted)); border-radius: 6px;">
+                        <strong>Using template:</strong> <span id="selected-template-name"></span>
+                    </div>
                     <div class="form-buttons">
                         <button type="button" id="btn-cancel-create" class="btn btn-secondary">Cancel</button>
-                        <button type="submit" class="btn btn-primary">Create & Load</button>
+                        <button type="submit" class="btn btn-primary">Create</button>
                     </div>
                 </form>
             </div>

@@ -83,6 +83,10 @@ class PresentationManager:
             else:
                 # Template has layouts, merge its CSS into deck
                 self._merge_layouts_css(presentation_dir, layouts_path)
+            
+            # Copy system images based on template metadata
+            include_system_images = metadata.get('include_system_images', None)
+            self._copy_system_images(presentation_dir, include_system_images)
                 
             return metadata
         else:
@@ -124,6 +128,9 @@ paginate: true
             # Copy default layouts
             self._copy_default_layouts(presentation_dir)
             
+            # Copy system placeholder images
+            self._copy_system_images(presentation_dir)
+            
             return metadata
 
     def _copy_default_layouts(self, presentation_dir):
@@ -145,6 +152,57 @@ paginate: true
             
             # Merge layouts CSS into deck.marp.md
             self._merge_layouts_css(presentation_dir, default_layouts_path)
+    
+    def _copy_system_images(self, presentation_dir, include_system_images=None):
+        """Copy system placeholder images to presentation directory.
+        
+        Args:
+            presentation_dir: Destination presentation directory
+            include_system_images: Override from template metadata (True/False/None)
+                - True: Always copy system images (even if template has images)
+                - False: Never copy system images
+                - None: Copy only if no images folder exists
+        """
+        import shutil
+        
+        # Determine images destination
+        images_dir = os.path.join(presentation_dir, "images")
+        
+        # Check if presentation already has images
+        has_images = os.path.exists(images_dir) and os.listdir(images_dir)
+        
+        # Decide whether to copy based on include_system_images parameter
+        if include_system_images is False:
+            return  # Explicitly don't want system images
+        elif include_system_images is True:
+            should_copy = True  # Explicitly want system images
+        else:
+            should_copy = not has_images  # Copy only if no images exist
+        
+        if not should_copy:
+            return
+        
+        # Find system images directory
+        system_images_path = os.path.join(self.templates_dir, "system-images")
+        
+        # Fallback to repo templates folder if not in templates_dir
+        if not os.path.exists(system_images_path):
+            local_templates = os.path.abspath("templates")
+            system_images_path = os.path.join(local_templates, "system-images")
+        
+        if not os.path.exists(system_images_path):
+            return  # No system images available
+        
+        # Create images directory if it doesn't exist
+        os.makedirs(images_dir, exist_ok=True)
+        
+        # Copy all placeholder images
+        for filename in os.listdir(system_images_path):
+            if filename.startswith('placeholder-') and filename.endswith('.png'):
+                src = os.path.join(system_images_path, filename)
+                dst = os.path.join(images_dir, filename)
+                if not os.path.exists(dst):  # Don't overwrite existing files
+                    shutil.copy2(src, dst)
     
     def _extract_layouts_css(self, layouts_path):
         """Extract CSS from layouts.md front matter."""
@@ -275,19 +333,28 @@ paginate: true
         templates = []
         if not os.path.exists(self.templates_dir):
             return []
+        
+        # Directories to exclude from template list
+        excluded_dirs = {'system-images', 'default-layouts.md'}
             
-        for name in os.listdir(self.templates_dir):
+        for name in sorted(os.listdir(self.templates_dir)):
+            # Skip excluded directories and files
+            if name in excluded_dirs or name.startswith('.'):
+                continue
+                
             path = os.path.join(self.templates_dir, name)
             if os.path.isdir(path):
                 metadata_path = os.path.join(path, "metadata.json")
-                desc = ""
+                # Only include directories that have metadata.json (actual templates)
                 if os.path.exists(metadata_path):
+                    desc = ""
                     try:
                         with open(metadata_path, "r") as f:
                             data = json.load(f)
                             desc = data.get('description', '')
-                    except: pass
-                templates.append({"name": name, "description": desc})
+                    except: 
+                        pass
+                    templates.append({"name": name, "description": desc})
         return templates
 
     def list_presentations(self):

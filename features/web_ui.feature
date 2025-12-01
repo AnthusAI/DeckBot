@@ -170,11 +170,11 @@ Feature: Web UI
     And the response should contain "Presentation not found"
 
   Scenario: User Browses Available Templates
-    Given templates "Light", "Dark", and "Candy" exist
+    Given templates "1. Alpine Minimal", "2. Editorial Modern", and "5. Midnight Grid" exist
     When I request the template list via API
-    Then the response should contain "Light"
-    And the response should contain "Dark"
-    And the response should contain "Candy"
+    Then the response should contain "1. Alpine Minimal"
+    And the response should contain "2. Editorial Modern"
+    And the response should contain "5. Midnight Grid"
 
   Scenario: Template Images Copied on Creation
     Given a template "ImageTemplate" exists with a background image

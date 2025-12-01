@@ -190,3 +190,50 @@ def step_impl(context, name, image_name):
 def step_impl(context, filepath):
     path = os.path.join(context.temp_dir, filepath)
     assert os.path.exists(path), f"File {path} does not exist"
+
+@when('I create a presentation "{name}" without a template')
+def step_impl(context, name):
+    """Create a presentation without using a template."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ['create', name], env={'VIBE_PRESENTATION_ROOT': context.temp_dir})
+    context.result = result
+
+@given('I create a presentation "{name}" without a template')
+def step_impl(context, name):
+    """Create a presentation without using a template (as a given)."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ['create', name], env={'VIBE_PRESENTATION_ROOT': context.temp_dir})
+    context.result = result
+
+@when('I create a presentation "{name}" from template "{template}"')
+def step_impl(context, name, template):
+    """Create a presentation from a template."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ['create', name, '--template', template], env={'VIBE_PRESENTATION_ROOT': context.temp_dir})
+    context.result = result
+
+@given('I load the presentation "{name}"')
+def step_impl(context, name):
+    """Load a presentation (reuse existing step)."""
+    from deckbot.agent import Agent
+    from unittest.mock import MagicMock, patch
+    
+    manager = PresentationManager(root_dir=context.temp_dir)
+    presentation = manager.get_presentation(name)
+    
+    # Set up mocked client for agent
+    context.mock_client = MagicMock()
+    with patch('deckbot.agent.genai.Client', return_value=context.mock_client):
+        context.agent = Agent(presentation, root_dir=context.temp_dir)
+        context.real_agent = context.agent
+        context.agent.model = "gemini-2.0-flash-exp"
+    
+    # Mock response
+    mock_response = MagicMock()
+    mock_response.candidates = [MagicMock()]
+    mock_response.candidates[0].content.parts = [MagicMock()]
+    mock_response.candidates[0].content.parts[0].text = "I understand."
+    context.mock_client.models.generate_content.return_value = mock_response
+    
+    context.responses = []
+    context.last_response = None

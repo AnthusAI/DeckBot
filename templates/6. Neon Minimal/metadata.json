@@ -1,0 +1,25 @@
+{
+  "name": "6. Neon Minimal",
+  "description": "Dark minimalist theme with Poppins and Open Sans fonts",
+  "instructions": "Create a minimal dark aesthetic with Poppins headings and Open Sans body text. Use aqua (#26C6DA) for primary accents and pink (#F06292) for highlights. Modern, vibrant, and attention-grabbing.",
+  "typography": {
+    "heading_font": "Poppins",
+    "body_font": "Open Sans"
+  },
+  "colors": {
+    "text": "#F5F5F5",
+    "background": "#0D0D0D",
+    "accents": ["#26C6DA", "#F06292"]
+  },
+  "design_opinions": {
+    "icons": "lucide",
+    "color_palette": ["#F5F5F5", "#26C6DA", "#F06292"],
+    "typography_style": "minimal and vibrant"
+  },
+  "image_style": {
+    "prompt": "Create minimal, vibrant images with neon-inspired colors. Use aqua (#26C6DA) and pink (#F06292) accents on very dark backgrounds (#0D0D0D). Style should feel modern, energetic, and attention-grabbing.",
+    "style_reference": null
+  },
+  "aspect_ratio": "16:9"
+}
+

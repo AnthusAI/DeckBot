@@ -291,6 +291,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     <span>Create New Presentation</span>
                 `;
                 createCard.onclick = () => {
+                    // Reset to show template selection dropdown
+                    document.getElementById('new-pres-template').style.display = '';
+                    document.getElementById('template-display').classList.add('hidden');
+                    document.getElementById('new-pres-template').value = '';
                     presentationCreate.classList.remove('hidden');
                     loadTemplates();
                 };
@@ -430,8 +434,11 @@ document.addEventListener('DOMContentLoaded', () => {
         // Use template button
         card.querySelector('.btn-open').onclick = (e) => {
             e.stopPropagation();
-            // Pre-fill template in create modal
+            // Pre-fill template in create modal and show template display
             document.getElementById('new-pres-template').value = template.name;
+            document.getElementById('selected-template-name').textContent = template.name;
+            document.getElementById('new-pres-template').style.display = 'none';
+            document.getElementById('template-display').classList.remove('hidden');
             presentationCreate.classList.remove('hidden');
             loadTemplates();
         };
@@ -439,6 +446,9 @@ document.addEventListener('DOMContentLoaded', () => {
         // Click card to use template
         card.onclick = () => {
             document.getElementById('new-pres-template').value = template.name;
+            document.getElementById('selected-template-name').textContent = template.name;
+            document.getElementById('new-pres-template').style.display = 'none';
+            document.getElementById('template-display').classList.remove('hidden');
             presentationCreate.classList.remove('hidden');
             loadTemplates();
         };
@@ -519,6 +529,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // ===== Menu Handlers =====
     menuNew.addEventListener('click', () => {
+        // Reset to show template selection dropdown
+        document.getElementById('new-pres-template').style.display = '';
+        document.getElementById('template-display').classList.add('hidden');
+        document.getElementById('new-pres-template').value = '';
         presentationCreate.classList.remove('hidden');
         loadTemplates();
     });

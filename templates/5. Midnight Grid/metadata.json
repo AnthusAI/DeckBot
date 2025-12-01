@@ -1,0 +1,25 @@
+{
+  "name": "5. Midnight Grid",
+  "description": "Dark theme with Work Sans and Inter fonts",
+  "instructions": "Create a modern dark theme with clean Work Sans headings and Inter body text. Use sky blue (#64B5F6) for primary accents and rose (#E57373) for highlights. Perfect for technical content in low-light environments.",
+  "typography": {
+    "heading_font": "Work Sans",
+    "body_font": "Inter"
+  },
+  "colors": {
+    "text": "#ECECEC",
+    "background": "#121212",
+    "accents": ["#64B5F6", "#E57373"]
+  },
+  "design_opinions": {
+    "icons": "lucide",
+    "color_palette": ["#ECECEC", "#64B5F6", "#E57373"],
+    "typography_style": "modern and technical"
+  },
+  "image_style": {
+    "prompt": "Create modern technical images with grid-based layouts and clean diagrams. Use sky blue (#64B5F6) and rose (#E57373) accents on dark backgrounds (#121212). Style should feel technical, modern, and precise.",
+    "style_reference": null
+  },
+  "aspect_ratio": "16:9"
+}
+

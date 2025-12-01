@@ -1,0 +1,25 @@
+{
+  "name": "3. Classic Tech",
+  "description": "Professional tech design with IBM Plex Sans and Serif fonts",
+  "instructions": "Maintain a professional, corporate tech aesthetic using the IBM Plex font family. Use IBM blue (#0F62FE) as the primary accent and red (#DA1E28) for warnings or critical emphasis. Keep designs structured and trustworthy.",
+  "typography": {
+    "heading_font": "IBM Plex Sans",
+    "body_font": "IBM Plex Serif"
+  },
+  "colors": {
+    "text": "#1C1C1C",
+    "background": "#FFFFFF",
+    "accents": ["#0F62FE", "#DA1E28"]
+  },
+  "design_opinions": {
+    "icons": "lucide",
+    "color_palette": ["#1C1C1C", "#0F62FE", "#DA1E28"],
+    "typography_style": "professional and technical"
+  },
+  "image_style": {
+    "prompt": "Create professional, technical images with clean diagrams and structured layouts. Use IBM blue (#0F62FE) as the primary color with red (#DA1E28) for emphasis on white backgrounds. Style should feel corporate, trustworthy, and technical.",
+    "style_reference": null
+  },
+  "aspect_ratio": "16:9"
+}
+

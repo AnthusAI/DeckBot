@@ -1,0 +1,25 @@
+{
+  "name": "2. Editorial Modern",
+  "description": "Editorial design with Montserrat and Merriweather fonts",
+  "instructions": "Create a modern editorial aesthetic with bold Montserrat headings and readable Merriweather body text. Use teal (#009688) for primary elements and amber (#F9A825) for highlights. Balance professional and approachable.",
+  "typography": {
+    "heading_font": "Montserrat",
+    "body_font": "Merriweather"
+  },
+  "colors": {
+    "text": "#222222",
+    "background": "#FAFAFA",
+    "accents": ["#009688", "#F9A825"]
+  },
+  "design_opinions": {
+    "icons": "lucide",
+    "color_palette": ["#222222", "#009688", "#F9A825"],
+    "typography_style": "editorial and bold"
+  },
+  "image_style": {
+    "prompt": "Create modern editorial-style images with clean layouts and bold typography. Use teal (#009688) as the primary color with amber (#F9A825) accents on a light background. Style should feel contemporary and magazine-like.",
+    "style_reference": null
+  },
+  "aspect_ratio": "16:9"
+}
+

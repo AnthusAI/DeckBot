@@ -1,0 +1,25 @@
+{
+  "name": "4. Warm Studio",
+  "description": "Warm, creative design with Crimson Pro and Work Sans fonts",
+  "instructions": "Create a warm, inviting aesthetic with elegant Crimson Pro headings and clean Work Sans body text. Use burnt orange (#D84315) for warmth and brown (#6D4C41) for grounding. Perfect for creative, human-centered content.",
+  "typography": {
+    "heading_font": "Crimson Pro",
+    "body_font": "Work Sans"
+  },
+  "colors": {
+    "text": "#2D2D2D",
+    "background": "#FFF8F0",
+    "accents": ["#D84315", "#6D4C41"]
+  },
+  "design_opinions": {
+    "icons": "lucide",
+    "color_palette": ["#2D2D2D", "#D84315", "#6D4C41"],
+    "typography_style": "warm and elegant"
+  },
+  "image_style": {
+    "prompt": "Create warm, inviting images with organic shapes and human-centered design. Use burnt orange (#D84315) and brown (#6D4C41) tones on a warm cream background (#FFF8F0). Style should feel approachable, creative, and elegant.",
+    "style_reference": null
+  },
+  "aspect_ratio": "16:9"
+}
+
