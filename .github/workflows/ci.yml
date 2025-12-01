@@ -34,9 +34,7 @@ jobs:
       - name: Run BDD tests
         run: |
           behave
-        env:
-          # Ensure integration tests are skipped (they require API keys)
-          BEHAVE_DEFAULT_TAGS: "-integration,-manual"
+        # .behaverc already has default_tags configured to exclude integration, manual, and wip tests
       
       - name: Upload test results
         if: always()
