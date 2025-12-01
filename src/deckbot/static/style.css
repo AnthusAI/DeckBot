@@ -1563,21 +1563,18 @@ button.btn-secondary:hover {
 }
 
 .item-card {
-  border: 1px solid hsl(var(--border));
+  border: 8px solid transparent;
   border-radius: var(--radius);
-  overflow: hidden;
   background: hsl(var(--card));
-  transition: all 0.2s;
+  transition: border-color 0.2s, box-shadow 0.2s;
   display: flex;
   flex-direction: column;
-  outline: 8px solid transparent;
-  outline-offset: -8px;
+  box-shadow: 0 0 0 1px hsl(var(--border)), 0 4px 12px rgba(0, 0, 0, 0);
 }
 
 .item-card:hover {
-  outline-color: hsl(var(--secondary));
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  transform: translateY(-2px);
+  border-color: hsl(292 84% 61%);
+  box-shadow: 0 0 0 1px hsl(var(--border)), 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
 .slides-preview {
@@ -1585,6 +1582,7 @@ button.btn-secondary:hover {
   background: hsl(var(--muted) / 0.3);
   overflow: hidden;
   position: relative;
+  border-radius: calc(var(--radius) - 8px);
 }
 
 .slides-scroll {
@@ -1729,7 +1727,7 @@ button.btn-secondary:hover {
 .create-new-card i {
   width: 48px;
   height: 48px;
-  margin-bottom: 12px;
+  margin-bottom: 20px;
   color: hsl(var(--muted-foreground));
 }
 

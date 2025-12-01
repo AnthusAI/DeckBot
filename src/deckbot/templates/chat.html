@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>DeckBot</title>
-    <link rel="stylesheet" href="/static/style.css">
+    <link rel="stylesheet" href="/static/style.css?v={{ cache_bust }}">
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
 </head>
@@ -60,6 +60,21 @@
                     </button>
                 </div>
             </div>
+            <div class="menu-item">
+                <button class="menu-button">View</button>
+                <div class="dropdown-menu">
+                    <button id="menu-view-preview" class="dropdown-item checkable active">
+                        <i data-lucide="eye" style="width: 16px; height: 16px;"></i>
+                        Preview
+                        <span class="kbd">⌘1</span>
+                    </button>
+                    <button id="menu-view-layouts" class="dropdown-item checkable">
+                        <i data-lucide="layout-template" style="width: 16px; height: 16px;"></i>
+                        Layouts
+                        <span class="kbd">⌘2</span>
+                    </button>
+                </div>
+            </div>
         </div>
         <div class="menu-right">
             <div class="theme-selector">
@@ -78,13 +93,35 @@
 
     <!-- Main Container -->
     <div class="container">
-        <!-- Presentation Selection Modal -->
-        <div id="presentation-select" class="overlay">
-            <div class="modal">
-                <h2>Select or Create Presentation</h2>
-                <div id="presentation-list-container">
-                    <ul id="presentation-list"></ul>
-                    <button id="btn-create-new" class="create-new-btn">+ Create New Presentation</button>
+        <!-- Welcome Screen (replaces presentation selection modal) -->
+        <div id="welcome-screen" class="welcome-screen hidden">
+            <div class="welcome-header">
+                <h1>DeckBot</h1>
+                <div class="welcome-tabs">
+                    <button class="tab-btn active" data-tab="presentations">
+                        <i data-lucide="presentation" style="width: 18px; height: 18px;"></i>
+                        Presentations
+                    </button>
+                    <button class="tab-btn" data-tab="templates">
+                        <i data-lucide="layout-template" style="width: 18px; height: 18px;"></i>
+                        Templates
+                    </button>
+                </div>
+            </div>
+            
+            <div class="welcome-content">
+                <!-- Presentations Tab -->
+                <div class="tab-content active" data-tab="presentations">
+                    <div class="items-grid" id="presentations-grid">
+                        <!-- Populated by JS -->
+                    </div>
+                </div>
+                
+                <!-- Templates Tab -->
+                <div class="tab-content" data-tab="templates">
+                    <div class="items-grid" id="templates-grid">
+                        <!-- Populated by JS -->
+                    </div>
                 </div>
             </div>
         </div>
@@ -100,8 +137,8 @@
                         <option value="">No template</option>
                     </select>
                     <div class="form-buttons">
-                        <button type="submit">Create & Load</button>
-                        <button type="button" id="btn-cancel-create" class="secondary">Cancel</button>
+                        <button type="button" id="btn-cancel-create" class="btn btn-secondary">Cancel</button>
+                        <button type="submit" class="btn btn-primary">Create & Load</button>
                     </div>
                 </form>
             </div>
@@ -122,8 +159,8 @@
                     </select>
                 </div>
                 <div class="form-buttons">
-                    <button id="btn-cancel-pres-settings" class="secondary">Cancel</button>
-                    <button id="btn-save-pres-settings" class="primary">Save</button>
+                    <button id="btn-cancel-pres-settings" class="btn btn-secondary">Cancel</button>
+                    <button id="btn-save-pres-settings" class="btn btn-primary">Save</button>
                 </div>
             </div>
         </div>
@@ -141,8 +178,8 @@
                         </label>
                     </div>
                     <div class="form-buttons">
-                        <button type="submit">Save Copy</button>
-                        <button type="button" id="btn-cancel-save-as" class="secondary">Cancel</button>
+                        <button type="button" id="btn-cancel-save-as" class="btn btn-secondary">Cancel</button>
+                        <button type="submit" class="btn btn-primary">Save Copy</button>
                     </div>
                 </form>
             </div>
@@ -241,8 +278,19 @@
         <!-- Sidebar -->
         <div class="sidebar">
             <!-- Preview View -->
-            <div id="view-preview" class="sidebar-view">
+            <div id="view-preview" class="sidebar-view active">
                 <iframe id="preview-frame" src=""></iframe>
+            </div>
+            
+            <!-- Layouts View -->
+            <div id="view-layouts" class="sidebar-view">
+                <div class="layouts-container">
+                    <h3>Available Layouts</h3>
+                    <p class="layouts-hint">Select a layout to apply it to your slides</p>
+                    <div id="layouts-accordion">
+                        <!-- Layouts will be loaded here -->
+                    </div>
+                </div>
             </div>
         </div>
     </div>

@@ -201,3 +201,8 @@ Feature: Web UI
     Given a presentation "missing-deck" does not exist
     When I load the presentation "missing-deck" via API
     Then the response status code should be 404
+
+  Scenario: Welcome Screen - Create Card Spacing
+    When I load the web application
+    Then the create-new-card icon should have adequate vertical spacing
+    And the icon margin-bottom should be at least 20px

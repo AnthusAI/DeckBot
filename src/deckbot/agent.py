@@ -163,6 +163,50 @@ class Agent:
         except Exception:
             pass
         
+        # Load available layouts
+        layouts_section = ""
+        try:
+            layouts_path = os.path.join(self.presentation_dir, "layouts.md")
+            if os.path.exists(layouts_path):
+                with open(layouts_path, "r") as f:
+                    layouts_content = f.read()
+                
+                # Parse layout names from HTML comments
+                import re
+                layout_names = re.findall(r'<!-- layout: ([\w-]+) -->', layouts_content)
+                
+                if layout_names:
+                    layouts_section = "\n## Available Layouts\n"
+                    layouts_section += "This presentation includes pre-designed slide layouts. Use the 'get_layouts' tool to see full details, or reference these layouts when creating slides:\n\n"
+                    
+                    # Parse all layout metadata
+                    for layout_name in layout_names:
+                        # Find this layout's metadata in the content
+                        layout_start = layouts_content.find(f'<!-- layout: {layout_name} -->')
+                        if layout_start >= 0:
+                            # Find next layout or end of file
+                            next_layout = layouts_content.find('<!-- layout:', layout_start + 1)
+                            layout_section = layouts_content[layout_start:next_layout if next_layout > 0 else len(layouts_content)]
+                            
+                            # Extract metadata
+                            image_friendly = re.search(r'<!-- image-friendly: (true|false) -->', layout_section)
+                            aspect_ratio = re.search(r'<!-- recommended-aspect-ratio: ([\d:]+) -->', layout_section)
+                            description = re.search(r'<!-- description: (.+?) -->', layout_section)
+                            
+                            desc_text = description.group(1) if description else f"{layout_name} layout"
+                            layouts_section += f"- **{layout_name}**: {desc_text}"
+                            
+                            if image_friendly and image_friendly.group(1) == "true":
+                                layouts_section += f" ✓ Image-friendly"
+                                if aspect_ratio:
+                                    layouts_section += f" (best aspect ratio: {aspect_ratio.group(1)})"
+                            
+                            layouts_section += "\n"
+                    
+                    layouts_section += "\n**Important for Image Generation**: When generating images for specific layouts, use the recommended aspect ratio for that layout. Call 'get_layouts()' to see all layout details including aspect ratio recommendations.\n"
+        except Exception:
+            pass
+        
         # Get current presentation aspect ratio
         current_aspect_ratio = "4:3"  # default
         try:
@@ -194,6 +238,7 @@ Description: {self.context.get('description', '')}
 4. Always keep the "Vibe" in mind: Professional but enthusiastic, clean, and modern.
 
 {final_design_section}
+{layouts_section}
 
 ## Marp Documentation
 {marp_docs}
@@ -207,8 +252,14 @@ Description: {self.context.get('description', '')}
   - **Note**: `list_files` returns items in **reverse-chronological order** (newest first). The first file listed is the most recently created/modified.
   - Generated image batches are stored in the `drafts/` directory. Use `list_files('drafts')` to find previously generated images.
 - Use 'read_file' to read slide content (though full context is provided above).
+- Use 'create_slide_with_layout' to create a SINGLE new slide using a layout template.
+  - **IMPORTANT**: Use this tool when the user wants to create ONLY ONE new slide.
+  - This triggers an interactive UI where the user selects from visual layout previews (similar to image generation).
+  - You call the tool → System shows layouts → User picks one → Slide is created automatically.
+  - **DO NOT use this tool if the user wants multiple slides** - instead, create multiple slides manually using 'replace_text' or 'write_file', since the UI only allows selecting one layout at a time.
 - Use 'replace_text' to safely edit part of a file (e.g., insert an image link, change a title) without rewriting the whole file.
   - **ALWAYS prefer 'replace_text' for small edits to existing files.**
+  - **Use this for creating MULTIPLE slides** by adding them to deck.marp.md.
 - Use 'write_file' to create NEW files or completely OVERWRITE existing files.
   - **WARNING**: 'write_file' replaces the ENTIRE content of the file. If you use it on an existing file, you MUST provide the COMPLETE new content (including all existing slides), otherwise you will delete user data.
 - Use 'copy_file', 'move_file', 'delete_file', 'create_directory' to organize and manage files within the presentation.

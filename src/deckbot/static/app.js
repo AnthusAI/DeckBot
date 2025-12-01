@@ -4,8 +4,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const messageInput = document.getElementById('message-input');
     const btnSend = document.getElementById('btn-send');
     const thinkingIndicator = document.getElementById('thinking-indicator');
-    const presentationSelect = document.getElementById('presentation-select');
-    const presentationList = document.getElementById('presentation-list');
+    const welcomeScreen = document.getElementById('welcome-screen');
     const presentationCreate = document.getElementById('presentation-create');
     const btnCancelCreate = document.getElementById('btn-cancel-create');
     
@@ -16,6 +15,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const menuExport = document.getElementById('menu-export');
     const menuPresSettings = document.getElementById('menu-pres-settings');
     const menuSaveAs = document.getElementById('menu-save-as');
+    const menuViewPreview = document.getElementById('menu-view-preview');
+    const menuViewLayouts = document.getElementById('menu-view-layouts');
     
     // Sidebar elements
     const viewPreview = document.getElementById('view-preview');
@@ -261,26 +262,269 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    // ===== Welcome Screen Functions =====
+    function showWelcomeScreen() {
+        welcomeScreen.classList.remove('hidden');
+        loadPresentationsGrid();
+        loadTemplatesGrid();
+        refreshIcons();
+    }
+    
+    function hideWelcomeScreen() {
+        welcomeScreen.classList.add('hidden');
+    }
+    
+    function loadPresentationsGrid() {
+        const grid = document.getElementById('presentations-grid');
+        grid.innerHTML = '<div class="slides-preview-loading"><div class="spinner"></div> Loading presentations...</div>';
+        
+        fetch('/api/presentations')
+            .then(r => r.json())
+            .then(presentations => {
+                grid.innerHTML = '';
+                
+                // Add "Create New" card first
+                const createCard = document.createElement('div');
+                createCard.className = 'item-card create-new-card';
+                createCard.innerHTML = `
+                    <i data-lucide="plus-circle"></i>
+                    <span>Create New Presentation</span>
+                `;
+                createCard.onclick = () => {
+                    presentationCreate.classList.remove('hidden');
+                    loadTemplates();
+                };
+                grid.appendChild(createCard);
+                
+                // Add presentation cards
+                presentations.forEach(pres => {
+                    const card = createPresentationCard(pres);
+                    grid.appendChild(card);
+                });
+                
+                refreshIcons();
+            })
+            .catch(err => {
+                console.error('Error loading presentations:', err);
+                grid.innerHTML = '<p style="color: hsl(var(--muted-foreground));">Error loading presentations</p>';
+            });
+    }
+    
+    function loadTemplatesGrid() {
+        const grid = document.getElementById('templates-grid');
+        grid.innerHTML = '<div class="slides-preview-loading"><div class="spinner"></div> Loading templates...</div>';
+        
+        fetch('/api/templates')
+            .then(r => r.json())
+            .then(templates => {
+                grid.innerHTML = '';
+                
+                if (templates.length === 0) {
+                    grid.innerHTML = '<p style="color: hsl(var(--muted-foreground));">No templates available</p>';
+                    return;
+                }
+                
+                templates.forEach(template => {
+                    const card = createTemplateCard(template);
+                    grid.appendChild(card);
+                });
+                
+                refreshIcons();
+            })
+            .catch(err => {
+                console.error('Error loading templates:', err);
+                grid.innerHTML = '<p style="color: hsl(var(--muted-foreground));">Error loading templates</p>';
+            });
+    }
+    
+    function createPresentationCard(pres) {
+        const card = document.createElement('div');
+        card.className = 'item-card';
+        
+        // Format date
+        let dateStr = 'Recently';
+        if (pres.last_modified) {
+            const date = new Date(pres.last_modified);
+            const now = new Date();
+            const diffDays = Math.floor((now - date) / (1000 * 60 * 60 * 24));
+            if (diffDays === 0) dateStr = 'Today';
+            else if (diffDays === 1) dateStr = 'Yesterday';
+            else if (diffDays < 7) dateStr = `${diffDays} days ago`;
+            else dateStr = date.toLocaleDateString();
+        }
+        
+        card.innerHTML = `
+            <div class="slides-preview">
+                <div class="slides-scroll" data-name="${escapeHtml(pres.name)}">
+                    <div class="slides-preview-loading">
+                        <div class="spinner"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="item-info">
+                <h3>${escapeHtml(pres.name)}</h3>
+                <p class="item-description">${escapeHtml(pres.description || 'No description')}</p>
+                <div class="item-meta">
+                    <span><i data-lucide="file-text" style="width: 12px; height: 12px;"></i> ${pres.slide_count || 0} slides</span>
+                    <span><i data-lucide="clock" style="width: 12px; height: 12px;"></i> ${dateStr}</span>
+                </div>
+            </div>
+            <div class="item-actions">
+                <button class="btn-open">Open</button>
+                <button class="btn-delete">Delete</button>
+            </div>
+        `;
+        
+        // Load preview slides
+        const scrollContainer = card.querySelector('.slides-scroll');
+        loadSlidePreviewsForPresentation(pres.name, scrollContainer);
+        
+        // Open button
+        card.querySelector('.btn-open').onclick = (e) => {
+            e.stopPropagation();
+            loadPresentation(pres.name);
+        };
+        
+        // Delete button
+        card.querySelector('.btn-delete').onclick = (e) => {
+            e.stopPropagation();
+            deletePresentation(pres.name);
+        };
+        
+        // Click card to open
+        card.onclick = () => {
+            loadPresentation(pres.name);
+        };
+        
+        return card;
+    }
+    
+    function createTemplateCard(template) {
+        const card = document.createElement('div');
+        card.className = 'item-card';
+        
+        card.innerHTML = `
+            <div class="slides-preview">
+                <div class="slides-scroll" data-name="${escapeHtml(template.name)}">
+                    <div class="slides-preview-loading">
+                        <div class="spinner"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="item-info">
+                <h3>${escapeHtml(template.name)}</h3>
+                <p class="item-description">${escapeHtml(template.description || 'No description')}</p>
+                <div class="item-meta">
+                    <span><i data-lucide="file-text" style="width: 12px; height: 12px;"></i> ${template.slide_count || 0} slides</span>
+                </div>
+            </div>
+            <div class="item-actions">
+                <button class="btn-open">Use Template</button>
+            </div>
+        `;
+        
+        // Load preview slides
+        const scrollContainer = card.querySelector('.slides-scroll');
+        loadSlidePreviewsForTemplate(template.name, scrollContainer);
+        
+        // Use template button
+        card.querySelector('.btn-open').onclick = (e) => {
+            e.stopPropagation();
+            // Pre-fill template in create modal
+            document.getElementById('new-pres-template').value = template.name;
+            presentationCreate.classList.remove('hidden');
+            loadTemplates();
+        };
+        
+        // Click card to use template
+        card.onclick = () => {
+            document.getElementById('new-pres-template').value = template.name;
+            presentationCreate.classList.remove('hidden');
+            loadTemplates();
+        };
+        
+        return card;
+    }
+    
+    function loadSlidePreviewsForPresentation(name, container) {
+        fetch(`/api/presentations/${encodeURIComponent(name)}/preview-slides`)
+            .then(r => r.json())
+            .then(data => {
+                if (data.error) {
+                    container.innerHTML = '<div class="slides-preview-loading">No preview available</div>';
+                    return;
+                }
+                
+                container.innerHTML = '';
+                if (data.previews && data.previews.length > 0) {
+                    data.previews.forEach(url => {
+                        const img = document.createElement('img');
+                        img.src = url;
+                        img.alt = 'Slide preview';
+                        container.appendChild(img);
+                    });
+                } else {
+                    container.innerHTML = '<div class="slides-preview-loading">No slides</div>';
+                }
+            })
+            .catch(err => {
+                console.error('Error loading preview slides:', err);
+                container.innerHTML = '<div class="slides-preview-loading">Preview unavailable</div>';
+            });
+    }
+    
+    function loadSlidePreviewsForTemplate(name, container) {
+        fetch(`/api/templates/${encodeURIComponent(name)}/preview-slides`)
+            .then(r => r.json())
+            .then(data => {
+                if (data.error) {
+                    container.innerHTML = '<div class="slides-preview-loading">No preview available</div>';
+                    return;
+                }
+                
+                container.innerHTML = '';
+                if (data.previews && data.previews.length > 0) {
+                    data.previews.forEach(url => {
+                        const img = document.createElement('img');
+                        img.src = url;
+                        img.alt = 'Slide preview';
+                        container.appendChild(img);
+                    });
+                } else {
+                    container.innerHTML = '<div class="slides-preview-loading">No slides</div>';
+                }
+            })
+            .catch(err => {
+                console.error('Error loading preview slides:', err);
+                container.innerHTML = '<div class="slides-preview-loading">Preview unavailable</div>';
+            });
+    }
+    
+    // Welcome screen tab switching
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const tab = btn.dataset.tab;
+            
+            // Update button states
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            
+            // Update content visibility
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            document.querySelector(`.tab-content[data-tab="${tab}"]`).classList.add('active');
+            
+            refreshIcons();
+        });
+    });
+
     // ===== Menu Handlers =====
     menuNew.addEventListener('click', () => {
-        presentationSelect.classList.add('hidden');
         presentationCreate.classList.remove('hidden');
         loadTemplates();
     });
     
-    // Create New button (using event delegation since it's in the HTML)
-    document.addEventListener('click', (e) => {
-        if (e.target && e.target.id === 'btn-create-new') {
-            presentationSelect.classList.add('hidden');
-            presentationCreate.classList.remove('hidden');
-            loadTemplates();
-        }
-    });
-    
     menuOpen.addEventListener('click', () => {
-        presentationSelect.classList.remove('hidden');
-        presentationCreate.classList.add('hidden');
-        loadPresentationList();
+        showWelcomeScreen();
     });
 
     if (menuClose) {
@@ -299,8 +543,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 currentPresName = "";
                 chatHistory.innerHTML = '';
                 previewFrame.src = '';
-                presentationSelect.classList.remove('hidden');
-                loadPresentationList();
+                showWelcomeScreen();
             })
             .catch(err => {
                 console.error('Error closing presentation:', err);
@@ -423,6 +666,123 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
     
+    // ===== View Menu Handlers =====
+    
+    function switchView(viewName) {
+        const allViews = document.querySelectorAll('.sidebar-view');
+        const allViewMenuItems = document.querySelectorAll('.dropdown-item.checkable');
+        
+        // Hide all views
+        allViews.forEach(view => view.classList.remove('active'));
+        
+        // Uncheck all view menu items
+        allViewMenuItems.forEach(item => item.classList.remove('active'));
+        
+        // Show the selected view
+        const targetView = document.getElementById(`view-${viewName}`);
+        if (targetView) {
+            targetView.classList.add('active');
+        }
+        
+        // Check the selected menu item
+        const targetMenuItem = document.getElementById(`menu-view-${viewName}`);
+        if (targetMenuItem) {
+            targetMenuItem.classList.add('active');
+        }
+        
+        // Save preference
+        fetch('/api/preferences/current_view', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({value: viewName})
+        }).catch(err => console.error('Error saving view preference:', err));
+        
+        // If switching to layouts view, load layouts
+        if (viewName === 'layouts') {
+            loadLayoutsView();
+        }
+    }
+    
+    function createSlideWithLayout(layoutName) {
+        // Send message to agent to create a slide with the selected layout
+        const message = `Create a new slide using the "${layoutName}" layout.`;
+        messageInput.value = message;
+        sendMessage();
+        
+        // Switch to preview view to see the result
+        // (The preview will update when presentation_updated event is received)
+        switchView('preview');
+    }
+    
+    function loadLayoutsView() {
+        fetch('/api/layouts')
+            .then(r => r.json())
+            .then(data => {
+                const accordion = document.getElementById('layouts-accordion');
+                if (!accordion) return;
+                
+                accordion.innerHTML = '';
+                
+                if (!data.layouts || data.layouts.length === 0) {
+                    accordion.innerHTML = '<p>No layouts available</p>';
+                    return;
+                }
+                
+                data.layouts.forEach(layout => {
+                    const layoutDiv = document.createElement('div');
+                    layoutDiv.className = 'layout-item';
+                    
+                    let badges = '';
+                    if (layout.image_friendly) {
+                        badges += '<span class="layout-badge image-badge">✓ Image-friendly</span>';
+                        if (layout.recommended_aspect_ratio) {
+                            badges += `<span class="layout-badge aspect-badge">${escapeHtml(layout.recommended_aspect_ratio)}</span>`;
+                        }
+                    }
+                    
+                    layoutDiv.innerHTML = `
+                        <h4>${layout.name}</h4>
+                        ${layout.description ? `<p class="layout-description">${escapeHtml(layout.description)}</p>` : ''}
+                        ${badges}
+                        <img class="layout-preview-image" 
+                             src="/api/layouts/${encodeURIComponent(layout.name)}/preview" 
+                             alt="${escapeHtml(layout.name)} preview"
+                             onerror="this.style.display='none'">
+                        <div class="layout-actions">
+                            <button class="btn-new-slide" data-layout="${escapeHtml(layout.name)}">
+                                New Slide
+                            </button>
+                        </div>
+                        <details>
+                            <summary>View Code</summary>
+                            <pre>${escapeHtml(layout.content)}</pre>
+                        </details>
+                    `;
+                    
+                    // Add click handler for New Slide button
+                    const newSlideBtn = layoutDiv.querySelector('.btn-new-slide');
+                    newSlideBtn.addEventListener('click', () => {
+                        createSlideWithLayout(layout.name);
+                    });
+                    
+                    accordion.appendChild(layoutDiv);
+                });
+            })
+            .catch(err => console.error('Error loading layouts:', err));
+    }
+    
+    if (menuViewPreview) {
+        menuViewPreview.addEventListener('click', () => switchView('preview'));
+    }
+    
+    if (menuViewLayouts) {
+        menuViewLayouts.addEventListener('click', () => switchView('layouts'));
+    }
+    
+    // Always default to preview view
+    // (Saved preferences are not used - preview is the default for better UX)
+    switchView('preview');
+    
     if (btnSavePreferences) {
         btnSavePreferences.addEventListener('click', () => {
             // Save both theme and color theme
@@ -495,16 +855,30 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Mac-style keyboard shortcut: Cmd+,
     document.addEventListener('keydown', (e) => {
+        // Preferences: Cmd/Ctrl + ,
         if ((e.metaKey || e.ctrlKey) && e.key === ',') {
             e.preventDefault();
             openPreferences();
+        }
+        
+        // View shortcuts: Cmd/Ctrl + 1/2
+        if ((e.metaKey || e.ctrlKey) && e.key === '1') {
+            e.preventDefault();
+            switchView('preview');
+        }
+        if ((e.metaKey || e.ctrlKey) && e.key === '2') {
+            e.preventDefault();
+            switchView('layouts');
         }
     });
     
     if (btnCancelCreate) {
         btnCancelCreate.addEventListener('click', () => {
             presentationCreate.classList.add('hidden');
-            presentationSelect.classList.remove('hidden');
+            // Only show welcome screen if no presentation is loaded
+            if (!currentPresName) {
+                showWelcomeScreen();
+            }
         });
     }
 
@@ -534,51 +908,7 @@ document.addEventListener('DOMContentLoaded', () => {
             });
     }
 
-    // ===== Presentation List =====
-    function loadPresentationList() {
-        fetch('/api/presentations')
-            .then(r => r.json())
-            .then(presos => {
-                presentationList.innerHTML = '';
-                
-                if (presos.length === 0) {
-                    // Show empty state
-                    const emptyMsg = document.createElement('p');
-                    emptyMsg.className = 'placeholder';
-                    emptyMsg.textContent = 'No presentations yet. Click "Create New" below to get started.';
-                    presentationList.appendChild(emptyMsg);
-                } else {
-                    presos.forEach(p => {
-                        const li = document.createElement('li');
-                        
-                        const nameSpan = document.createElement('span');
-                        nameSpan.className = 'pres-name';
-                        nameSpan.textContent = `${p.name} - ${p.description || ''}`;
-                        nameSpan.onclick = () => loadPresentation(p.name);
-                        
-                        const deleteBtn = document.createElement('button');
-                        deleteBtn.className = 'btn-delete';
-                        deleteBtn.textContent = 'Delete';
-                        deleteBtn.onclick = (e) => {
-                            e.stopPropagation();
-                            deletePresentation(p.name);
-                        };
-                        
-                        li.appendChild(nameSpan);
-                        li.appendChild(deleteBtn);
-                        presentationList.appendChild(li);
-                    });
-                }
-                
-                refreshIcons();
-            })
-            .catch(err => {
-                console.error('Error loading presentations:', err);
-                if (presentationList) {
-                    presentationList.innerHTML = '<p class="placeholder">Error loading presentations. Check console for details.</p>';
-                }
-            });
-    }
+    // ===== Presentation Delete =====
 
     function deletePresentation(name) {
         if (!confirm(`Are you sure you want to delete "${name}"?\n\nThis cannot be undone.`)) {
@@ -595,7 +925,8 @@ document.addEventListener('DOMContentLoaded', () => {
             if (data.error) {
                 alert('Error: ' + data.error);
             } else {
-                loadPresentationList();
+                // Reload the presentations grid
+                loadPresentationsGrid();
             }
         })
         .catch(err => {
@@ -675,8 +1006,10 @@ document.addEventListener('DOMContentLoaded', () => {
         .then(r => r.json())
         .then(data => {
             currentPresName = name;
-            // currentPresentation.textContent = name; // Element removed from UI
-            presentationSelect.classList.add('hidden');
+            hideWelcomeScreen();
+            
+            // Switch to preview view when loading a presentation
+            switchView('preview');
             
             // Load preview
             reloadPreview();
@@ -748,6 +1081,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 alert('Error: ' + data.error);
             } else {
                 presentationCreate.classList.add('hidden');
+                // Clear form
+                document.getElementById('new-pres-name').value = '';
+                document.getElementById('new-pres-desc').value = '';
+                document.getElementById('new-pres-template').value = '';
                 loadPresentation(name);
             }
         });
@@ -985,6 +1322,104 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
     // ===== Server-Sent Events =====
+    // ===== Layout Selection Dialog =====
+    
+    function showLayoutSelectionDialog(layouts, title, position) {
+        // Create overlay
+        const overlay = document.createElement('div');
+        overlay.className = 'overlay';
+        overlay.style.display = 'flex';
+        
+        // Create modal
+        const modal = document.createElement('div');
+        modal.className = 'modal layout-selection-modal';
+        
+        const titleText = title ? ` titled "${title}"` : '';
+        modal.innerHTML = `
+            <h2>Select a Layout</h2>
+            <p>Creating a new slide${titleText}. Choose a layout:</p>
+            <div class="layouts-grid"></div>
+            <div class="modal-actions">
+                <button class="btn-cancel">Cancel</button>
+            </div>
+        `;
+        
+        const layoutsGrid = modal.querySelector('.layouts-grid');
+        
+        // Add layout options
+        layouts.forEach(layout => {
+            const layoutCard = document.createElement('div');
+            layoutCard.className = 'layout-card';
+            
+            // Create simple preview (just show the layout name and first few lines)
+            const previewLines = layout.content.split('\\n').slice(0, 5).join('\\n');
+            
+            // Build metadata badges
+            let metadataHtml = '';
+            if (layout.description) {
+                metadataHtml += `<div class="layout-description">${escapeHtml(layout.description)}</div>`;
+            }
+            if (layout.image_friendly) {
+                metadataHtml += `<span class="layout-badge image-badge">✓ Image-friendly</span>`;
+                if (layout.recommended_aspect_ratio) {
+                    metadataHtml += `<span class="layout-badge aspect-badge">${escapeHtml(layout.recommended_aspect_ratio)}</span>`;
+                }
+            }
+            
+            layoutCard.innerHTML = `
+                <div class="layout-name">${layout.name}</div>
+                ${metadataHtml}
+                <div class="layout-preview">
+                    <pre>${escapeHtml(previewLines)}...</pre>
+                </div>
+                <button class="btn-select-layout" data-layout="${escapeHtml(layout.name)}">
+                    Select
+                </button>
+            `;
+            
+            layoutsGrid.appendChild(layoutCard);
+        });
+        
+        overlay.appendChild(modal);
+        document.body.appendChild(overlay);
+        
+        // Handle selection
+        modal.querySelectorAll('.btn-select-layout').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                const layoutName = btn.dataset.layout;
+                
+                try {
+                    const response = await fetch('/api/layouts/select', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({layout_name: layoutName})
+                    });
+                    
+                    if (response.ok) {
+                        document.body.removeChild(overlay);
+                    } else {
+                        const error = await response.json();
+                        alert('Error: ' + (error.error || 'Failed to select layout'));
+                    }
+                } catch (err) {
+                    alert('Error selecting layout: ' + err.message);
+                }
+            });
+        });
+        
+        // Handle cancel
+        modal.querySelector('.btn-cancel').addEventListener('click', () => {
+            document.body.removeChild(overlay);
+        });
+        
+        // Close on overlay click
+        overlay.addEventListener('click', (e) => {
+            if (e.target === overlay) {
+                document.body.removeChild(overlay);
+            }
+        });
+    }
+    
     const evtSource = new EventSource('/events');
     
     evtSource.addEventListener("message", (e) => {
@@ -1090,8 +1525,17 @@ document.addEventListener('DOMContentLoaded', () => {
         appendSystemMessage(`✗ Tool ${data.tool} error: ${data.error}`);
     });
 
+    evtSource.addEventListener("layout_request", (e) => {
+        const data = JSON.parse(e.data);
+        showLayoutSelectionDialog(data.layouts, data.title, data.position);
+    });
+
     evtSource.addEventListener("presentation_updated", (e) => {
         console.log("Presentation updated, reloading preview...");
+        
+        // Automatically switch to preview view when presentation is updated
+        switchView('preview');
+        
         // Check if event data contains slide number
         let slideNumber = null;
         try {
@@ -1119,18 +1563,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 console.log('Restoring session for:', state.name);
                 loadPresentation(state.name);
                 
-                // Ensure correct view
-                if (presentationSelect) {
-                    presentationSelect.classList.add('hidden');
-                }
+                // Ensure welcome screen is hidden
+                hideWelcomeScreen();
                 if (presentationCreate) {
                     presentationCreate.classList.add('hidden');
                 }
             } else {
-                // No state, show selector
-                if (presentationSelect) {
-                    presentationSelect.classList.remove('hidden');
-                }
+                // No state, show welcome screen
+                showWelcomeScreen();
                 if (presentationCreate) {
                     presentationCreate.classList.add('hidden');
                 }
@@ -1138,13 +1578,9 @@ document.addEventListener('DOMContentLoaded', () => {
         })
         .catch(err => {
             console.error('Error checking state:', err);
-            // Fallback to selector
-            if (presentationSelect) {
-                presentationSelect.classList.remove('hidden');
-            }
+            // Fallback to welcome screen
+            showWelcomeScreen();
         });
-    
-    loadPresentationList();
     
     // Initialize icons
     refreshIcons();

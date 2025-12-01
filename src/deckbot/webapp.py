@@ -15,7 +15,8 @@ current_service = None
 
 @app.route('/')
 def index():
-    return render_template('chat.html')
+    import time
+    return render_template('chat.html', cache_bust=int(time.time()))
 
 @app.route('/api/serve-image')
 def serve_image():
@@ -69,8 +70,32 @@ def serve_presentation_image(filename):
 
 @app.route('/api/presentations', methods=['GET'])
 def list_presentations():
+    import glob
+    from datetime import datetime
+    
     manager = PresentationManager()
     presentations = manager.list_presentations()
+    
+    # Enrich with slide count and last modified
+    for pres in presentations:
+        pres_dir = os.path.join(manager.root_dir, pres['name'])
+        deck_path = os.path.join(pres_dir, 'deck.marp.md')
+        
+        # Get slide count
+        if os.path.exists(deck_path):
+            with open(deck_path, 'r') as f:
+                content = f.read()
+                # Count slides (separated by ---)
+                slide_count = len(content.split('\n---\n'))
+                pres['slide_count'] = slide_count
+                
+                # Get last modified
+                mtime = os.path.getmtime(deck_path)
+                pres['last_modified'] = datetime.fromtimestamp(mtime).isoformat()
+        else:
+            pres['slide_count'] = 0
+            pres['last_modified'] = pres.get('created_at', '')
+    
     return jsonify(presentations)
 
 @app.route('/api/presentations/create', methods=['POST'])
@@ -134,7 +159,229 @@ def delete_presentation():
 def list_templates():
     manager = PresentationManager()
     templates = manager.list_templates()
+    
+    # Enrich with slide count
+    for template in templates:
+        template_dir = os.path.join(manager.templates_dir, template['name'])
+        deck_path = os.path.join(template_dir, 'deck.marp.md')
+        
+        # Get slide count
+        if os.path.exists(deck_path):
+            with open(deck_path, 'r') as f:
+                content = f.read()
+                # Count slides (separated by ---)
+                slide_count = len(content.split('\n---\n'))
+                template['slide_count'] = slide_count
+        else:
+            template['slide_count'] = 0
+    
     return jsonify(templates)
+
+@app.route('/api/presentations/<name>/preview-slides')
+def get_presentation_preview_slides(name):
+    """Generate and return cached PNG previews of all slides for a presentation."""
+    import subprocess
+    import glob
+    
+    manager = PresentationManager()
+    pres_dir = os.path.join(manager.root_dir, name)
+    
+    if not os.path.exists(pres_dir):
+        return jsonify({"error": "Presentation not found"}), 404
+    
+    deck_path = os.path.join(pres_dir, "deck.marp.md")
+    if not os.path.exists(deck_path):
+        return jsonify({"error": "Presentation source not found"}), 404
+    
+    # Create cache directory
+    cache_dir = os.path.join(pres_dir, ".previews")
+    os.makedirs(cache_dir, exist_ok=True)
+    
+    # Check if previews exist
+    existing_previews = sorted(glob.glob(os.path.join(cache_dir, "slide.*.png")))
+    
+    # Check if deck was modified after previews were generated
+    needs_regeneration = False
+    if not existing_previews:
+        needs_regeneration = True
+    else:
+        deck_mtime = os.path.getmtime(deck_path)
+        preview_mtime = os.path.getmtime(existing_previews[0])
+        if deck_mtime > preview_mtime:
+            needs_regeneration = True
+    
+    if needs_regeneration:
+        try:
+            # Generate preview images using Marp CLI
+            subprocess.run(
+                [
+                    'npx', '@marp-team/marp-cli',
+                    'deck.marp.md',
+                    '--images', 'png',
+                    '--output', os.path.join('.previews', 'slide.png'),
+                    '--allow-local-files'
+                ],
+                cwd=pres_dir,
+                check=True,
+                capture_output=True,
+                timeout=30
+            )
+            
+            # Refresh the list of previews
+            existing_previews = sorted(glob.glob(os.path.join(cache_dir, "slide.*.png")))
+            
+        except subprocess.TimeoutExpired:
+            return jsonify({"error": "Preview generation timed out"}), 500
+        except Exception as e:
+            print(f"Error generating previews for {name}: {e}")
+            return jsonify({"error": str(e)}), 500
+    
+    # Return URLs for all preview images
+    preview_urls = []
+    for preview_path in existing_previews:
+        filename = os.path.basename(preview_path)
+        url = f"/api/presentations/{name}/.previews/{filename}"
+        preview_urls.append(url)
+    
+    return jsonify({"previews": preview_urls})
+
+@app.route('/api/presentations/<name>/.previews/<filename>')
+def serve_presentation_preview(name, filename):
+    """Serve a cached preview image for a presentation."""
+    manager = PresentationManager()
+    pres_dir = os.path.join(manager.root_dir, name)
+    cache_dir = os.path.join(pres_dir, ".previews")
+    
+    return send_from_directory(cache_dir, filename)
+
+@app.route('/api/templates/<name>/preview-slides')
+def get_template_preview_slides(name):
+    """Generate and return cached PNG previews of all slides for a template."""
+    import subprocess
+    import glob
+    
+    manager = PresentationManager()
+    template_dir = os.path.join(manager.templates_dir, name)
+    
+    if not os.path.exists(template_dir):
+        return jsonify({"error": "Template not found"}), 404
+    
+    deck_path = os.path.join(template_dir, "deck.marp.md")
+    if not os.path.exists(deck_path):
+        return jsonify({"error": "Template source not found"}), 404
+    
+    # Create cache directory
+    cache_dir = os.path.join(template_dir, ".previews")
+    os.makedirs(cache_dir, exist_ok=True)
+    
+    # Check if previews exist
+    existing_previews = sorted(glob.glob(os.path.join(cache_dir, "slide.*.png")))
+    
+    # Check if deck was modified after previews were generated
+    needs_regeneration = False
+    if not existing_previews:
+        needs_regeneration = True
+    else:
+        deck_mtime = os.path.getmtime(deck_path)
+        preview_mtime = os.path.getmtime(existing_previews[0])
+        if deck_mtime > preview_mtime:
+            needs_regeneration = True
+    
+    if needs_regeneration:
+        try:
+            # Generate preview images using Marp CLI
+            subprocess.run(
+                [
+                    'npx', '@marp-team/marp-cli',
+                    'deck.marp.md',
+                    '--images', 'png',
+                    '--output', os.path.join('.previews', 'slide.png'),
+                    '--allow-local-files'
+                ],
+                cwd=template_dir,
+                check=True,
+                capture_output=True,
+                timeout=30
+            )
+            
+            # Refresh the list of previews
+            existing_previews = sorted(glob.glob(os.path.join(cache_dir, "slide.*.png")))
+            
+        except subprocess.TimeoutExpired:
+            return jsonify({"error": "Preview generation timed out"}), 500
+        except Exception as e:
+            print(f"Error generating previews for template {name}: {e}")
+            return jsonify({"error": str(e)}), 500
+    
+    # Return URLs for all preview images
+    preview_urls = []
+    for preview_path in existing_previews:
+        filename = os.path.basename(preview_path)
+        url = f"/api/templates/{name}/.previews/{filename}"
+        preview_urls.append(url)
+    
+    return jsonify({"previews": preview_urls})
+
+@app.route('/api/templates/<name>/.previews/<filename>')
+def serve_template_preview(name, filename):
+    """Serve a cached preview image for a template."""
+    manager = PresentationManager()
+    template_dir = os.path.join(manager.templates_dir, name)
+    cache_dir = os.path.join(template_dir, ".previews")
+    
+    return send_from_directory(cache_dir, filename)
+
+@app.route('/api/layouts', methods=['GET'])
+def get_layouts():
+    """Get available layouts for the current presentation with metadata."""
+    global current_service
+    if not current_service:
+        return jsonify({"error": "No presentation loaded"}), 400
+    
+    pres_dir = current_service.agent.presentation_dir
+    layouts_path = os.path.join(pres_dir, "layouts.md")
+    
+    if not os.path.exists(layouts_path):
+        return jsonify({"layouts": []})
+    
+    try:
+        with open(layouts_path, "r") as f:
+            content = f.read()
+        
+        import re
+        
+        # Split by --- to get individual slides
+        slides = content.split('\n---\n')
+        
+        layouts = []
+        for i, slide in enumerate(slides):
+            # Look for layout name in HTML comment
+            match = re.search(r'<!-- layout: ([\w-]+) -->', slide)
+            if match:
+                layout_name = match.group(1)
+                # Skip front matter slide
+                if slide.strip().startswith('---'):
+                    continue
+                
+                # Parse metadata from HTML comments
+                image_friendly = re.search(r'<!-- image-friendly: (true|false) -->', slide)
+                aspect_ratio = re.search(r'<!-- recommended-aspect-ratio: ([\d:]+) -->', slide)
+                image_position = re.search(r'<!-- image-position: ([\w-]+) -->', slide)
+                description = re.search(r'<!-- description: (.+?) -->', slide)
+                
+                layouts.append({
+                    "name": layout_name,
+                    "content": slide.strip(),
+                    "index": i,
+                    "image_friendly": image_friendly.group(1) == "true" if image_friendly else False,
+                    "recommended_aspect_ratio": aspect_ratio.group(1) if aspect_ratio else None,
+                    "image_position": image_position.group(1) if image_position else None,
+                    "description": description.group(1) if description else None
+                })
+        
+        return jsonify({"layouts": layouts})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/api/preferences', methods=['GET'])
 def get_preferences():
@@ -281,6 +528,121 @@ def select_image():
         return jsonify({"path": saved_path, "filename": os.path.basename(saved_path)})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+@app.route('/api/layouts/select', methods=['POST'])
+def select_layout():
+    """Select a layout and notify the agent."""
+    global current_service
+    if not current_service:
+        return jsonify({"error": "No presentation loaded"}), 400
+    
+    data = request.json
+    layout_name = data.get('layout_name')
+    
+    if not layout_name:
+        return jsonify({"error": "Layout name required"}), 400
+    
+    try:
+        result = current_service.select_layout(layout_name)
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/layouts/<layout_name>/preview')
+def get_layout_preview(layout_name):
+    """Generate and serve a preview image for a layout."""
+    global current_service
+    if not current_service:
+        return "No presentation loaded", 404
+    
+    import subprocess
+    import tempfile
+    import hashlib
+    
+    pres_dir = current_service.agent.presentation_dir
+    layouts_path = os.path.join(pres_dir, "layouts.md")
+    
+    if not os.path.exists(layouts_path):
+        return "Layouts file not found", 404
+    
+    # Create cache directory for preview images
+    cache_dir = os.path.join(pres_dir, ".layout-previews")
+    os.makedirs(cache_dir, exist_ok=True)
+    
+    # Generate cache key from layout name
+    cache_key = hashlib.md5(layout_name.encode()).hexdigest()
+    preview_path = os.path.join(cache_dir, f"{cache_key}.png")
+    
+    # Return cached preview if it exists
+    if os.path.exists(preview_path):
+        return send_file(preview_path, mimetype='image/png')
+    
+    try:
+        # Read layouts file
+        with open(layouts_path, "r") as f:
+            content = f.read()
+        
+        # Extract the specific layout
+        import re
+        pattern = f'<!-- layout: {re.escape(layout_name)} -->.*?(?=\n---\n|$)'
+        match = re.search(pattern, content, re.DOTALL)
+        
+        if not match:
+            return "Layout not found", 404
+        
+        layout_content = match.group(0)
+        
+        # Extract front matter from layouts.md (CSS styles)
+        front_matter = ""
+        if content.startswith('---'):
+            parts = content.split('\n---\n', 2)
+            if len(parts) >= 2:
+                front_matter = '---\n' + parts[1] + '\n---\n'
+        
+        # Create a temporary markdown file with just this layout
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.md', delete=False) as tmp:
+            tmp.write(front_matter)
+            tmp.write('\n')
+            tmp.write(layout_content)
+            tmp_path = tmp.name
+        
+        try:
+            # Generate preview image using Marp CLI
+            subprocess.run(
+                [
+                    'npx', '@marp-team/marp-cli',
+                    tmp_path,
+                    '--image', 'png',
+                    '--output', preview_path,
+                    '--allow-local-files'
+                ],
+                check=True,
+                capture_output=True,
+                timeout=10
+            )
+            
+            # Marp CLI outputs slide-001.png, rename to our cache key
+            generated_path = preview_path.replace('.png', '-001.png')
+            if os.path.exists(generated_path):
+                os.rename(generated_path, preview_path)
+            
+            if os.path.exists(preview_path):
+                return send_file(preview_path, mimetype='image/png')
+            else:
+                return "Failed to generate preview", 500
+                
+        finally:
+            # Clean up temp file
+            if os.path.exists(tmp_path):
+                os.unlink(tmp_path)
+                
+    except subprocess.TimeoutExpired:
+        return "Preview generation timed out", 500
+    except Exception as e:
+        print(f"Error generating preview for {layout_name}: {e}")
+        import traceback
+        traceback.print_exc()
+        return f"Error: {str(e)}", 500
 
 @app.route('/events')
 def events():

@@ -75,6 +75,14 @@ class PresentationManager:
             
             with open(metadata_path, "w") as f:
                 json.dump(metadata, f, indent=2)
+            
+            # Copy default layouts if template doesn't have layouts.md
+            layouts_path = os.path.join(presentation_dir, "layouts.md")
+            if not os.path.exists(layouts_path):
+                self._copy_default_layouts(presentation_dir)
+            else:
+                # Template has layouts, merge its CSS into deck
+                self._merge_layouts_css(presentation_dir, layouts_path)
                 
             return metadata
         else:
@@ -113,8 +121,156 @@ paginate: true
 - Bullet 2
 """)
             
+            # Copy default layouts
+            self._copy_default_layouts(presentation_dir)
+            
             return metadata
 
+    def _copy_default_layouts(self, presentation_dir):
+        """Copy default layouts to a presentation directory."""
+        import shutil
+        
+        # Look for default layouts in templates directory
+        default_layouts_path = os.path.join(self.templates_dir, "default-layouts.md")
+        
+        # Fallback to repo templates folder if not in templates_dir
+        if not os.path.exists(default_layouts_path):
+            # Try local templates folder
+            local_templates = os.path.abspath("templates")
+            default_layouts_path = os.path.join(local_templates, "default-layouts.md")
+        
+        if os.path.exists(default_layouts_path):
+            dest_path = os.path.join(presentation_dir, "layouts.md")
+            shutil.copy2(default_layouts_path, dest_path)
+            
+            # Merge layouts CSS into deck.marp.md
+            self._merge_layouts_css(presentation_dir, default_layouts_path)
+    
+    def _extract_layouts_css(self, layouts_path):
+        """Extract CSS from layouts.md front matter."""
+        if not os.path.exists(layouts_path):
+            return None
+        
+        try:
+            with open(layouts_path, "r") as f:
+                lines = f.readlines()
+            
+            # Check if file starts with front matter
+            if not lines or not lines[0].strip() == '---':
+                return None
+            
+            # Find the closing --- of front matter
+            front_matter_end = -1
+            for i in range(1, len(lines)):
+                if lines[i].strip() == '---':
+                    front_matter_end = i
+                    break
+            
+            if front_matter_end == -1:
+                return None
+            
+            # Extract front matter lines
+            front_matter_lines = lines[1:front_matter_end]
+            
+            # Find and extract style block
+            css_lines = []
+            in_style_block = False
+            
+            for line in front_matter_lines:
+                if line.startswith('style:'):
+                    in_style_block = True
+                    continue
+                elif in_style_block:
+                    # Check if this is the start of a new top-level key
+                    if line and not line[0].isspace() and ':' in line:
+                        break
+                    # This is part of the style block - remove 2-space indentation
+                    if line.startswith('  '):
+                        css_lines.append(line[2:].rstrip())
+                    elif not line.strip():  # Empty line
+                        css_lines.append('')
+            
+            if css_lines:
+                css = '\n'.join(css_lines).strip()
+                return css
+            
+            return None
+        except Exception as e:
+            print(f"Error extracting layouts CSS: {e}")
+            import traceback
+            traceback.print_exc()
+            return None
+    
+    def _merge_layouts_css(self, presentation_dir, layouts_path):
+        """Merge layouts CSS into deck.marp.md."""
+        deck_path = os.path.join(presentation_dir, "deck.marp.md")
+        
+        if not os.path.exists(deck_path):
+            return
+        
+        # Extract CSS from layouts
+        layouts_css = self._extract_layouts_css(layouts_path)
+        if not layouts_css:
+            return
+        
+        try:
+            with open(deck_path, "r") as f:
+                lines = f.readlines()
+            
+            # Check if deck has front matter
+            if not lines or not lines[0].strip() == '---':
+                # No front matter, add one with the layouts CSS
+                new_lines = ['---\n', 'marp: true\n', 'style: |\n']
+                for css_line in layouts_css.split('\n'):
+                    new_lines.append(f'  {css_line}\n')
+                new_lines.append('---\n\n')
+                new_lines.extend(lines)
+                
+                with open(deck_path, "w") as f:
+                    f.writelines(new_lines)
+                return
+            
+            # Find the end of front matter
+            front_matter_end = -1
+            for i in range(1, len(lines)):
+                if lines[i].strip() == '---':
+                    front_matter_end = i
+                    break
+            
+            if front_matter_end == -1:
+                return
+            
+            # Check if there's already a style block in front matter
+            has_style = False
+            style_line_idx = -1
+            for i in range(1, front_matter_end):
+                if lines[i].startswith('style:'):
+                    has_style = True
+                    style_line_idx = i
+                    break
+            
+            if has_style:
+                # TODO: Merge with existing styles (for now, skip if styles exist)
+                # This would require more complex logic to merge CSS blocks
+                print("Deck already has styles - skipping CSS merge")
+                return
+            else:
+                # Add style block before the closing ---
+                style_lines = ['style: |\n']
+                for css_line in layouts_css.split('\n'):
+                    style_lines.append(f'  {css_line}\n')
+                
+                # Insert style lines before the closing ---
+                new_lines = lines[:front_matter_end] + style_lines + lines[front_matter_end:]
+                
+                with open(deck_path, "w") as f:
+                    f.writelines(new_lines)
+                
+        except Exception as e:
+            print(f"Error merging layouts CSS: {e}")
+            import traceback
+            traceback.print_exc()
+    
     def list_templates(self):
         templates = []
         if not os.path.exists(self.templates_dir):

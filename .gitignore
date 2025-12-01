@@ -37,6 +37,10 @@ presentations/*
 # Except we might want to allow committing demo decks?
 # For now, ignore all to be safe and clean.
 
+# Ignore preview images (auto-generated from markdown)
+**/.previews/
+*.previews/
+
 # User preferences and runtime state
 .deckbot.yaml
 .deckbot_state.yaml

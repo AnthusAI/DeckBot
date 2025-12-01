@@ -550,6 +550,109 @@ class PresentationTools:
             return f"Aspect ratio changed to {aspect_ratio} and deck recompiled."
         except Exception as e:
             return f"Error setting aspect ratio: {str(e)}"
+    
+    def get_layouts(self):
+        """
+        Get available slide layouts for this presentation.
+        Returns a list of layouts with their names, markdown content, and metadata.
+        """
+        layouts_path = os.path.join(self.presentation_dir, "layouts.md")
+        
+        if not os.path.exists(layouts_path):
+            return "No layouts file found in this presentation."
+        
+        try:
+            with open(layouts_path, "r") as f:
+                content = f.read()
+            
+            # Parse layouts by splitting on slide breaks and finding layout comments
+            import re
+            
+            # Split by --- to get individual slides
+            slides = content.split('\n---\n')
+            
+            layouts = []
+            for slide in slides:
+                # Look for layout name in HTML comment
+                match = re.search(r'<!-- layout: ([\w-]+) -->', slide)
+                if match:
+                    layout_name = match.group(1)
+                    # Extract just the slide content (skip front matter for first slide)
+                    if slide.strip().startswith('---'):
+                        # This is the first slide with front matter, skip it
+                        continue
+                    
+                    # Parse metadata from HTML comments
+                    image_friendly = re.search(r'<!-- image-friendly: (true|false) -->', slide)
+                    aspect_ratio = re.search(r'<!-- recommended-aspect-ratio: ([\d:]+) -->', slide)
+                    image_position = re.search(r'<!-- image-position: ([\w-]+) -->', slide)
+                    description = re.search(r'<!-- description: (.+?) -->', slide)
+                    
+                    layout_info = {
+                        "name": layout_name,
+                        "content": slide.strip(),
+                        "image_friendly": image_friendly.group(1) == "true" if image_friendly else False,
+                        "recommended_aspect_ratio": aspect_ratio.group(1) if aspect_ratio else None,
+                        "image_position": image_position.group(1) if image_position else None,
+                        "description": description.group(1) if description else None
+                    }
+                    
+                    layouts.append(layout_info)
+            
+            if not layouts:
+                return "No layouts found in layouts.md"
+            
+            # Format for easy reading
+            result = "Available Layouts:\n\n"
+            for layout in layouts:
+                result += f"## {layout['name']}\n"
+                if layout['description']:
+                    result += f"{layout['description']}\n"
+                if layout['image_friendly']:
+                    result += f"✓ Image-friendly"
+                    if layout['recommended_aspect_ratio']:
+                        result += f" (recommended aspect ratio: {layout['recommended_aspect_ratio']})"
+                    if layout['image_position']:
+                        result += f" - Position: {layout['image_position']}"
+                    result += "\n"
+                result += f"\n```markdown\n{layout['content']}\n```\n\n"
+            
+            return result
+            
+        except Exception as e:
+            return f"Error reading layouts: {str(e)}"
+    
+    def create_slide_with_layout(self, title: str = None, position: str = "end"):
+        """
+        Create a new slide using a layout template.
+        
+        This tool triggers a UI flow where the user selects a layout from visual previews.
+        Similar to image generation, this is an interactive process:
+        1. Call this tool to initiate slide creation
+        2. System shows layout previews to the user
+        3. User selects a layout
+        4. System creates the new slide with that layout
+        
+        Args:
+            title: Optional title for the new slide
+            position: Where to insert the slide - "end" (default), "beginning", or "after-current"
+        
+        Returns:
+            Instructions for the user to select a layout
+        
+        Important: 
+        - Use this tool ONLY when the user wants to create ONE new slide
+        - For multiple slides, create them manually by editing deck.marp.md directly,
+          since the UI only allows selecting one layout at a time
+        """
+        # This is a WEB-MODE tool - it will trigger the layout selection UI
+        if hasattr(self, 'on_layout_request') and callable(self.on_layout_request):
+            # Notify the session service to show layout options
+            self.on_layout_request(title=title, position=position)
+            return f"Layout selection UI displayed. Waiting for user to select a layout for the new slide{' titled: ' + title if title else ''}..."
+        else:
+            # CLI mode fallback - just show available layouts
+            return f"Layout selection requires the web UI. Available layouts:\n\n{self.get_layouts()}\n\nTo create a slide, use write_file or replace_text to add the layout markdown to deck.marp.md"
 
     def get_full_context(self):
         """Reads all markdown files in the presentation to build full context."""

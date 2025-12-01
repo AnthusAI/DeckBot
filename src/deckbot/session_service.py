@@ -25,12 +25,17 @@ class SessionService:
         # Chat history file path (same as agent's history file)
         self.history_file = getattr(self.agent, 'history_file', None)
 
+        # Web-specific state for layout selection
+        self.pending_layout_request = None
+        
         # Hook presentation updates
         if hasattr(self.agent, 'tools_handler'):
             # Accept slide_number (or any data) and forward it
             self.agent.tools_handler.on_presentation_updated = lambda data=None: self._notify("presentation_updated", data)
             # Hook image generation requests from the agent
             self.agent.tools_handler.on_image_generation = self._handle_agent_image_request
+            # Hook layout creation requests from the agent
+            self.agent.tools_handler.on_layout_request = self._handle_layout_request
             # Hook tool events
             self.agent.tools_handler.on_tool_call = self._handle_tool_event
             # Hook agent request details
@@ -416,6 +421,155 @@ class SessionService:
         
         return history
 
+    def get_layouts(self):
+        """Get available layouts for the current presentation with metadata."""
+        import re
+        
+        layouts_path = os.path.join(self.agent.presentation_dir, "layouts.md")
+        
+        if not os.path.exists(layouts_path):
+            return []
+        
+        try:
+            with open(layouts_path, "r") as f:
+                content = f.read()
+            
+            # Split by --- to get individual slides
+            slides = content.split('\n---\n')
+            
+            layouts = []
+            for i, slide in enumerate(slides):
+                # Look for layout name in HTML comment
+                match = re.search(r'<!-- layout: ([\w-]+) -->', slide)
+                if match:
+                    layout_name = match.group(1)
+                    # Skip front matter slide
+                    if slide.strip().startswith('---'):
+                        continue
+                    
+                    # Parse metadata from HTML comments
+                    image_friendly = re.search(r'<!-- image-friendly: (true|false) -->', slide)
+                    aspect_ratio = re.search(r'<!-- recommended-aspect-ratio: ([\d:]+) -->', slide)
+                    image_position = re.search(r'<!-- image-position: ([\w-]+) -->', slide)
+                    description = re.search(r'<!-- description: (.+?) -->', slide)
+                    
+                    layouts.append({
+                        "name": layout_name,
+                        "content": slide.strip(),
+                        "index": i,
+                        "image_friendly": image_friendly.group(1) == "true" if image_friendly else False,
+                        "recommended_aspect_ratio": aspect_ratio.group(1) if aspect_ratio else None,
+                        "image_position": image_position.group(1) if image_position else None,
+                        "description": description.group(1) if description else None
+                    })
+            
+            return layouts
+        except Exception as e:
+            print(f"Error reading layouts: {e}")
+            return []
+    
+    def _handle_layout_request(self, title=None, position="end"):
+        """
+        Called when agent's create_slide_with_layout tool is invoked.
+        Shows layout selection UI to the user.
+        """
+        # Store the request details
+        self.pending_layout_request = {
+            "title": title,
+            "position": position
+        }
+        
+        # Get available layouts
+        layouts = self.get_layouts()
+        
+        # Notify frontend to show layout selection UI
+        self._notify("layout_request", {
+            "layouts": layouts,
+            "title": title,
+            "position": position
+        })
+    
+    def select_layout(self, layout_name: str):
+        """
+        Handle layout selection from UI after create_slide_with_layout was called.
+        Creates the new slide with the selected layout.
+        """
+        if not self.pending_layout_request:
+            return {"error": "No pending layout request"}
+        
+        try:
+            request = self.pending_layout_request
+            title = request.get("title")
+            position = request.get("position", "end")
+            
+            # Get the layout content
+            layouts = self.get_layouts()
+            selected_layout = next((l for l in layouts if l["name"] == layout_name), None)
+            
+            if not selected_layout:
+                return {"error": f"Layout '{layout_name}' not found"}
+            
+            # Read current deck
+            deck_path = os.path.join(self.agent.presentation_dir, "deck.marp.md")
+            with open(deck_path, "r") as f:
+                deck_content = f.read()
+            
+            # Prepare new slide content
+            new_slide = "\n---\n\n" + selected_layout["content"]
+            
+            # Replace placeholder title if provided
+            if title:
+                # Try to replace the first heading in the layout
+                import re
+                new_slide = re.sub(r'^# .+$', f'# {title}', new_slide, count=1, flags=re.MULTILINE)
+            
+            # Insert slide based on position
+            if position == "beginning":
+                # Insert after front matter
+                parts = deck_content.split('\n---\n', 2)
+                if len(parts) >= 2:
+                    deck_content = parts[0] + '\n---\n' + new_slide + '\n---\n' + '\n---\n'.join(parts[1:])
+            elif position == "after-current":
+                # For now, just append to end (would need slide tracking for true "after-current")
+                deck_content += new_slide
+            else:  # "end" (default)
+                deck_content += new_slide
+            
+            # Write updated deck
+            with open(deck_path, "w") as f:
+                f.write(deck_content)
+            
+            # Clear pending request
+            self.pending_layout_request = None
+            
+            # Notify the agent about the completion
+            import threading
+            def _notify_agent():
+                try:
+                    system_notification = f"[SYSTEM] New slide created using '{layout_name}' layout{' with title: ' + title if title else ''}. The slide has been added to the presentation."
+                    
+                    self._notify("message", {"role": "system", "content": system_notification})
+                    self._notify("thinking_start")
+                    
+                    try:
+                        response = self.agent.chat(system_notification, status_spinner=None)
+                        self._notify("message", {"role": "model", "content": response})
+                    finally:
+                        self._notify("thinking_end")
+                        # Trigger preview update
+                        self._notify("presentation_updated")
+                except Exception as e:
+                    print(f"Error notifying agent about layout creation: {e}")
+                    self._notify("error", {"message": f"Error finalizing layout: {e}"})
+            
+            # Run in background so API call returns immediately
+            threading.Thread(target=_notify_agent, daemon=True).start()
+            
+            return {"status": "success", "layout": layout_name, "title": title}
+        except Exception as e:
+            self._notify("error", {"message": str(e)})
+            raise e
+    
     def get_state(self):
         """Get current session state."""
         return {

@@ -569,3 +569,27 @@ def step_impl(context):
 def step_impl(context):
     # Verify the API call was made successfully
     assert context.response.status_code == 200 or context.response.status_code == 400
+
+@then('the create-new-card icon should have adequate vertical spacing')
+def step_impl(context):
+    import re
+    css_path = os.path.join(os.path.dirname(__file__), '..', '..', 'src', 'deckbot', 'static', 'style.css')
+    with open(css_path, 'r') as f:
+        css_content = f.read()
+    
+    # Find the .create-new-card i rule
+    pattern = r'\.create-new-card\s+i\s*\{([^}]+)\}'
+    match = re.search(pattern, css_content)
+    assert match, "Could not find .create-new-card i CSS rule"
+    context.create_card_icon_css = match.group(1)
+
+@then('the icon margin-bottom should be at least {min_px:d}px')
+def step_impl(context, min_px):
+    import re
+    # Extract margin-bottom value from the CSS rule
+    margin_pattern = r'margin-bottom:\s*(\d+)px'
+    match = re.search(margin_pattern, context.create_card_icon_css)
+    assert match, "Could not find margin-bottom in .create-new-card i CSS rule"
+    
+    actual_margin = int(match.group(1))
+    assert actual_margin >= min_px, f"Icon margin-bottom is {actual_margin}px, should be at least {min_px}px"
