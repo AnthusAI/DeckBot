@@ -197,6 +197,7 @@ def step_impl(context, name):
     runner = CliRunner()
     result = runner.invoke(cli, ['create', name], env={'VIBE_PRESENTATION_ROOT': context.temp_dir})
     context.result = result
+    context.current_presentation = name
 
 @given('I create a presentation "{name}" without a template')
 def step_impl(context, name):
@@ -204,6 +205,23 @@ def step_impl(context, name):
     runner = CliRunner()
     result = runner.invoke(cli, ['create', name], env={'VIBE_PRESENTATION_ROOT': context.temp_dir})
     context.result = result
+    context.current_presentation = name
+
+# Using step matcher to avoid ambiguous steps with template variations
+from behave import use_step_matcher
+use_step_matcher("re")
+
+@when('I create a presentation "(?P<name>[^"]+)"(?! from template)')
+def step_impl_plain(context, name):
+    """Create a presentation (defaults to no template) - negative lookahead ensures no 'from template'."""
+    from click.testing import CliRunner
+    from deckbot.cli import cli
+    runner = CliRunner()
+    result = runner.invoke(cli, ['create', name], env={'VIBE_PRESENTATION_ROOT': context.temp_dir})
+    context.result = result
+    context.current_presentation = name
+
+use_step_matcher("parse")  # Reset to default
 
 @when('I create a presentation "{name}" from template "{template}"')
 def step_impl(context, name, template):
@@ -211,6 +229,7 @@ def step_impl(context, name, template):
     runner = CliRunner()
     result = runner.invoke(cli, ['create', name, '--template', template], env={'VIBE_PRESENTATION_ROOT': context.temp_dir})
     context.result = result
+    context.current_presentation = name
 
 @given('I load the presentation "{name}"')
 def step_impl(context, name):

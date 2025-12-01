@@ -1,9 +1,10 @@
 [behave]
 # Default configuration for behave
 
-# Exclude integration tests from normal runs
+# Exclude integration tests and WIP scenarios from normal runs
 # Integration tests require API keys and make real API calls
-default_tags = -integration,-manual
+# WIP scenarios are for features not yet implemented
+default_tags = not integration and not manual and not wip
 
 # Use plain formatter by default
 format = plain

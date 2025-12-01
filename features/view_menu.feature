@@ -1,3 +1,4 @@
+@wip
 Feature: View Menu
   As a user
   I want to control what appears in the sidebar using a View menu

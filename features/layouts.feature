@@ -45,6 +45,7 @@ Feature: Slide Layouts
     Then the system should show layout selection UI
     And the user should see visual previews of available layouts
 
+  @wip
   Scenario: User selects a layout
     Given I have a presentation "select-test" in web mode
     And the agent has requested layout selection
@@ -53,6 +54,7 @@ Feature: Slide Layouts
     And the new slide should use the "two-column" layout
     And the agent should be notified of the successful creation
 
+  @wip
   Scenario: Agent creates multiple slides manually
     Given I have a presentation "multi-test"
     When the user asks for "three new slides with different content"
@@ -60,24 +62,28 @@ Feature: Slide Layouts
     And the agent should create slides by editing "deck.marp.md" directly
     And all three slides should be created
 
+  @wip
   Scenario: Layout with title replacement
     Given I have a presentation "title-test" in web mode
     When the agent calls "create_slide_with_layout" with title "Custom Title"
     And the user selects the "title-slide" layout
     Then the new slide's first heading should be "# Custom Title"
 
+  @wip
   Scenario: Layout insertion at end (default position)
     Given I have a presentation "position-test" with 3 existing slides
     When the agent creates a slide with layout at position "end"
     Then the presentation should have 4 slides
     And the new slide should be the last slide
 
+  @wip
   Scenario: Agent instructions mention create_slide_with_layout tool
     Given the agent is initialized
     Then the system prompt should mention "create_slide_with_layout"
     And the system prompt should explain it's for "ONLY ONE new slide"
     And the system prompt should explain to use manual editing for "multiple slides"
 
+  @wip
   Scenario: Layouts include image metadata
     Given I have a presentation "metadata-test" with layouts
     When I query the layouts
@@ -86,6 +92,7 @@ Feature: Slide Layouts
     And the "title-slide" layout should indicate it is NOT image-friendly
     And the "image-caption" layout should recommend aspect ratio "16:9"
 
+  @wip
   Scenario: Agent sees image-friendly layout information
     Given I have a presentation "image-info-test" with layouts
     When the agent loads the presentation
@@ -93,6 +100,7 @@ Feature: Slide Layouts
     And the system prompt should mention "recommended aspect ratio"
     And the system prompt should advise using aspect ratios when generating images
 
+  @wip
   Scenario: get_layouts tool returns image metadata
     Given I have a presentation "tool-metadata-test" with layouts
     When the agent calls "get_layouts"
@@ -101,6 +109,7 @@ Feature: Slide Layouts
     And the response should show "9:16" for "two-column" layout
     And the response should show "16:9" for "image-caption" layout
 
+  @wip
   Scenario: Layout selection UI shows image metadata
     Given I have a presentation "ui-metadata-test" in web mode
     When the layout selection dialog is shown

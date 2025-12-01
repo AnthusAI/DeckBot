@@ -17,7 +17,8 @@ def temporary_environment(context):
     context.temp_dir = tempfile.mkdtemp()
     os.environ['VIBE_PRESENTATION_ROOT'] = context.temp_dir
     yield context.temp_dir
-    shutil.rmtree(context.temp_dir)
+    # Use ignore_errors to avoid cleanup failures
+    shutil.rmtree(context.temp_dir, ignore_errors=True)
 
 def before_scenario(context, scenario):
     use_fixture(temporary_environment, context)

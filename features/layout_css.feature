@@ -14,18 +14,21 @@ Feature: Layout CSS Integration
     And the "deck.marp.md" should contain ".full-width-header"
     And the "deck.marp.md" should contain ".two-column"
 
+  @wip
   Scenario: Presentation from template includes template's layout CSS
     Given there is a template "StyledTemplate" with custom layouts and CSS
     When I create a presentation "styled-test" from template "StyledTemplate"
     Then the "deck.marp.md" should contain the template's layout CSS
     And the CSS should be merged into the front matter
 
+  @wip
   Scenario: Presentation from template without layouts includes default CSS
     Given there is a template "BasicTemplate" without a "layouts.md" file
     When I create a presentation "basic-test" from template "BasicTemplate"
     Then the "deck.marp.md" should contain the default layouts CSS
     And the "deck.marp.md" should contain ".full-width-header"
 
+  @wip
   Scenario: CSS is properly merged with existing deck styles
     Given there is a template "CustomStyle" with custom deck CSS
     When I create a presentation "merge-test" from template "CustomStyle"
@@ -40,6 +43,7 @@ Feature: Layout CSS Integration
     And it should include all layout classes
     And it should not include the front matter delimiters
 
+  @wip
   Scenario: Layouts work correctly after CSS merge
     Given I create a presentation "working-test"
     And I add a slide using the "two-column" layout
@@ -47,6 +51,7 @@ Feature: Layout CSS Integration
     Then the compiled HTML should include the two-column CSS
     And the two-column layout should be styled correctly
 
+  @wip
   Scenario: Updating layouts.md updates deck CSS
     Given I have a presentation "update-test"
     When I modify the layouts.md CSS

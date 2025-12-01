@@ -28,6 +28,12 @@ dependencies = [
     "pyyaml"
 ]
 
+[project.optional-dependencies]
+dev = [
+    "python-semantic-release>=9.0.0",
+    "build",
+]
+
 [project.urls]
 "Homepage" = "https://github.com/yourusername/deckbot"
 
@@ -36,3 +42,57 @@ deckbot = "deckbot.cli:cli"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.semantic_release]
+version_toml = [
+    "pyproject.toml:project.version",
+]
+version_variables = [
+    "src/deckbot/__init__.py:__version__",
+]
+build_command = "pip install build && python -m build"
+major_on_zero = true
+branch = "main"
+upload_to_vcs_release = true
+upload_to_repository = false
+# Remove the line below if you want to publish to PyPI
+# upload_to_repository = true
+
+[tool.semantic_release.changelog]
+template_dir = "templates"
+changelog_file = "CHANGELOG.md"
+exclude_commit_patterns = [
+    "^chore",
+    "^ci",
+    "^docs",
+    "^style",
+    "^test",
+    "^build\\(deps\\):",
+]
+
+[tool.semantic_release.changelog.environment]
+block_start_string = "{%"
+block_end_string = "%}"
+variable_start_string = "{{"
+variable_end_string = "}}"
+
+[tool.semantic_release.branches.main]
+match = "(main|master)"
+prerelease_token = "rc"
+prerelease = false
+
+[tool.semantic_release.commit_parser_options]
+allowed_tags = [
+    "build",
+    "chore",
+    "ci",
+    "docs",
+    "feat",
+    "fix",
+    "perf",
+    "style",
+    "refactor",
+    "test",
+]
+minor_tags = ["feat"]
+patch_tags = ["fix", "perf"]
