@@ -2,6 +2,7 @@ click
 rich
 behave
 google-genai
+google-api-core
 python-dotenv
 requests
 Pillow
