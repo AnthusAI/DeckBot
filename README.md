@@ -1,91 +1,77 @@
-<img src="assets/deckbot-logo.png" alt="DeckBot Logo" align="right" width="300">
+<img src="https://github.com/AnthusAI/DeckBot/blob/main/assets/deckbot-logo.png?raw=true" alt="DeckBot Logo" align="right" width="300">
 
-# DeckBot: Vibe-code your presentations in minutes
+# DeckBot
+> **It can't make you a better communicator. But it can manage your slide deck for you.**
 
-This is a CLI AI assistant, similar to tools like Claude Code or the Gemini CLI, but specialized for creating presentation slide decks with **Marp**. Marp is a declarative system that lets you define presentations using Markdown, which can then be viewed as interactive HTML or exported to PDF.
+DeckBot is a different kind of AI presentation tool. It's not a SaaS platform, it's not a plugin, and it's not trying to lock you into a proprietary format.
 
-This assistant helps you build these decks by writing content, organizing files, and using **Nano Banana** to generate custom images for your slides.
+It is a love letter to two emerging AI concepts: **Everything as Code** and **Give an Agent a Tool**.
 
-It shares some goals with tools like NotebookLM—using AI to create presentations—but it adopts a **code-developer perspective**. The single source of truth for your presentation is the source code: the Markdown files and image assets. This approach gives you complete ownership and the ability to fine-tune every detail, treating your deck as a software project.
+## The Concept: "Vibe Coding" for Slides
 
-This project demonstrates two core ideas:
+Most AI slide generators act like a vending machine: you put in a prompt, and you get a finished product. If you don't like it, you either generate a new one or struggle with a complex drag-and-drop editor.
 
-1.  **Everything as Code (EaC)**: A philosophy that treats all aspects of a system as code. In the age of AI, this means if your work can be represented as code, AI agents can read, understand, and collaborate on it with you. By treating slide decks as software projects (Markdown source code), we gain fine-grained control, version control, and the ability to collaborate with AI coding assistants.
-2.  **[Give an Agent a Tool](https://anth.us/blog/give-an-agent-a-tool/)**: Instead of trying to pre-program every possible behavior, we give an AI agent the right tools (file editing, image generation, compilation) and let it figure out how to use them to solve your problems.
+DeckBot is different. It treats your presentation as a **software project**. The single source of truth is a simple [Marp](https://marp.app/) project—just Markdown files, images, and CSS stored right on your computer.
 
-While tools like NotebookLM are pushing boundaries with instant deck generation, they often act as black boxes: the result might look great, but you can't easily edit the details later. This project is about **ownership and control**. Because your presentation is treated as a software project (Markdown source code), you have complete freedom. You can open the files and tweak every detail manually, or ask the AI assistant to refactor entire sections. You own the source, so you control the output.
+This enables a "vibe coding" workflow:
+1.  **You talk to the agent** about what you want ("Make the intro punchier," "Change the color scheme to neon cyberpunk," "Add a slide about Q4 metrics").
+2.  **The agent edits the code** directly.
+3.  **You see the results instantly** in the live preview.
+
+Because it's just code, you can iterate endlessly. The AI doesn't just "make a deck"—it *manages* the deck for you, handling the tedious formatting and file management while you focus on the story.
+
+## Why DeckBot?
+
+### 1. Everything as Code
+Your deck isn't hidden in a database. It's a folder of files on your machine.
+*   **Git-ready:** Version control your presentations like code.
+*   **Interoperable:** Edit the Markdown in VS Code, Obsidian, or Cursor.
+*   **Portable:** No "export" needed to own your data.
+
+### 2. Give an Agent a Tool
+Instead of hard-coding every feature, DeckBot gives a powerful LLM (Google Gemini) a set of tools:
+*   **File System Access:** To read and edit slides.
+*   **Image Generation:** To create custom visuals (via Google Imagen).
+*   **Compilation:** To turn Markdown into HTML/PDF.
+*   **Live Preview:** To see changes immediately.
+
+### 3. Local Control, Powerful AI
+DeckBot runs on your machine. Your files stay on your machine. But it leverages the power of state-of-the-art cloud models (Gemini Pro) for intelligence and image generation. You get the best of both worlds: the privacy and control of local files with the capability of top-tier AI.
+
+---
+
+## The Landscape: How We Compare
+
+There are dozens of AI presentation tools out there. Here is how DeckBot fits in.
+
+| Feature | NotebookLM | Kimi Slides / Gamma | Presenton | DeckBot |
+| :--- | :--- | :--- | :--- | :--- |
+| Primary Goal | Quick Summary | Polished Design | Privacy & Local Control | Iterative Content Control |
+| AI Model | Cloud | Cloud | Local (Ollama/Llama) | Gemini Pro + NanoBanana Pro |
+| Editing | None (Static Output) | Web UI / Drag-and-drop | Generation Scripts | "Vibe Coding" (Chat) |
+| Source of Truth | Cloud Platform | Cloud Platform | Local Files | Local Markdown files |
+| Ownership | Export only | Export only | 100% Yours | Local Data (Cloud AI) |
+
+### Other Options
+
+If DeckBot isn't what you're looking for, there is a crowded market of alternatives:
+
+*   **For Speed & Polish:** Tools like [Gamma](https://gamma.app), [Beautiful.ai](https://www.beautiful.ai), and [Decktopus](https://www.decktopus.com) excel at creating beautiful, marketing-ready decks in seconds. They are great if you need a finished product *now* and don't mind a closed ecosystem.
+*   **For Workflow Integration:** [Plus AI](https://plusai.com) and [Microsoft Copilot](https://www.microsoft.com/en-us/microsoft-365/powerpoint/ai-powerpoint-generator) integrate directly into Google Slides and PowerPoint, which is ideal if you need to stay in those tools.
+*   **For Content Summarization:** [NotebookLM](https://notebooklm.google.com) and [Kimi Slides](https://kimi.moonshot.cn) are amazing at turning documents into presentations, though editing the result can sometimes be rigid.
+*   **Open Source:** Projects like [Presenton](https://presenton.ai) and **slide-deck-ai** offer other approaches to local/code-based generation.
+
+**DeckBot is for the builders, the tinkerers, and anyone who believes that the best way to manage complex information is as clear, version-controlled text.**
+
+---
 
 ## Features
 
-*   **Everything as Code**: Presentations are stored as Markdown files, making them version-control friendly and easy for LLMs to read and edit.
-*   **AI Coding Assistant**: A built-in REPL powered by Google's Gemini models that acts as your pair programmer for slides. It can write content, organize structure, and manage files.
-*   **Nano Banana Image Generation**: Integrated "Nano Banana" (Google Imagen) support. Just ask for an image, and the agent will generate multiple candidates for you to choose from.
-*   **Interactive Workflow**:
-    *   **Chat**: Discuss your high-level ideas and let the agent draft the slides.
-    *   **Visualize**: Generate custom images on the fly.
-    *   **Preview**: Live preview your deck using the Marp CLI.
-    *   **Export**: Compile your finished deck to HTML or PDF.
-
-## Behavior Driven Development (BDD)
-
-This project uses **Behavior Driven Development** (using `behave`) as a primary tool for collaboration between humans and AI.
-
-*   **Human-Readable Specs**: BDD feature files (`.feature`) serve as a clear, unambiguous contract between the user and the AI. They describe *what* the software should do in plain English.
-*   **Stability & Reusability**: By codifying behavior into tests, we ensure that new features don't break existing ones. This allows us to build reliable, reusable software with the same effort often spent on "throwaway" scripts.
-*   **AI Alignment**: For AI-assisted coding, BDD provides a perfect feedback loop. If the behavior specs pass, the implementation is correct, regardless of the underlying code structure. This allows us to focus on desired outcomes and feature stability rather than getting bogged down in implementation details.
-
-### Running Tests
-
-This project has **comprehensive BDD test coverage** for both backend and frontend:
-
-**Run all tests (fast, no API calls):**
-```bash
-behave
-```
-
-**Backend/CLI tests:**
-```bash
-behave features/cli.feature          # CLI commands and interactive mode
-behave features/templates.feature    # Template system
-behave features/export.feature       # PDF export
-```
-
-**Frontend/Web UI tests:**
-```bash
-behave features/web_ui.feature       # Web UI, color themes, preferences, image selection
-```
-
-**See test output:**
-```bash
-behave --no-capture
-```
-
-**Test a specific scenario:**
-```bash
-behave features/web_ui.feature -n "Color Theme Selection"
-```
-
-**Integration tests (slow, requires API key):**
-
-Integration tests make real API calls to verify image generation and other external services.
-They are **excluded from normal test runs** by default to keep tests fast and avoid consuming API quota.
-
-Requirements:
-- `GOOGLE_API_KEY` environment variable set
-- Internet connection
-- May consume API quota
-
-Run integration tests:
-```bash
-./run_integration_tests.sh
-```
-
-Or manually:
-```bash
-behave --tags=integration features/image_generation_integration.feature
-```
-
-All features are documented in the `features/` directory using Gherkin syntax. Read them to understand exactly how the system behaves!
+*   **Iterative Refinement**: Continuously refine your presentation through natural language.
+*   **AI Coding Assistant**: A specialized Gemini-powered agent that acts as your pair programmer for slides.
+*   **Integrated Image Generation**: Uses Google Imagen (via Nano Banana) to generate and insert custom images, with automatic batch tracking and history.
+*   **Live Web UI**: A local web interface for previewing slides, selecting themes, and chatting with the agent.
+*   **PDF Export**: Compile your finished deck to PDF for sharing.
 
 ## Installation
 
@@ -99,79 +85,63 @@ All features are documented in the `features/` directory using Gherkin syntax. R
 2.  **External Dependencies:**
     *   **Node.js & npm**: Required for Marp CLI (preview/export).
     *   **Chrome/Chromium**: Required for PDF export.
-    *   **VS Code `code` command**: Optional, for opening folders automatically.
 
 3.  **Configuration:**
     Create a `.env` file in the project root with your Google AI API key:
     ```bash
     GOOGLE_API_KEY=your_api_key_here
     ```
-    
-    Get your API key from [Google AI Studio](https://aistudio.google.com/apikey)
+    Get your API key from [Google AI Studio](https://aistudio.google.com/apikey).
 
 ## Usage
 
-### Web UI (Default, Recommended)
-Simply run the CLI to launch the web UI with color themes, visual image selection, and live preview:
-
+### Web UI (Recommended)
+Run the CLI to launch the web interface:
 ```bash
 deckbot
 ```
+Open `http://localhost:5555` to create decks, chat with the agent, and see live updates.
 
-Then open `http://localhost:5555` in your browser to select an existing deck or create a new one.
-
-**Custom Port:**
-```bash
-deckbot --port 8080
-```
-
-### Text Mode (Interactive CLI)
-Prefer a terminal-based interface? Use the `--text` flag to start the interactive text launcher:
-
+### Text Mode
+For a pure terminal experience:
 ```bash
 deckbot --text
 ```
 
-You can select an existing deck or create a new one from the terminal prompt.
+### Common Commands
+*   `deckbot create my-deck --template Simple`
+*   `deckbot templates list`
+*   `deckbot preview my-deck`
 
-**Resume Session**: Pick up exactly where you left off in text mode:
+---
+
+## Development
+
+This project follows **Behavior Driven Development (BDD)**.
+*   **Specs first:** All features are defined in `features/*.feature`.
+*   **Test-driven:** We run `behave` to verify everything works.
+*   **Semantic Release:** Automated versioning based on conventional commits.
+
+Run tests:
 ```bash
-deckbot --text --continue
+behave
 ```
 
-### Commands
+## Contributing
 
-*   **Create a Deck**:
-    ```bash
-    deckbot create my-deck --description "A demo deck"
-    ```
+Contributions are welcome! Whether it's bug reports, feature requests, or pull requests, we'd love to hear from you.
 
-*   **Use Templates**:
-    List available templates:
-    ```bash
-    deckbot templates list
-    ```
-    Create from a template:
-    ```bash
-    deckbot create my-startup --template Simple
-    ```
+1.  Check out [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+2.  Fork the repo and create your feature branch.
+3.  Ensure your changes pass the BDD tests (`behave`).
+4.  Submit a pull request.
 
-*   **Start the Assistant (Text Mode)**:
-    ```bash
-    deckbot load my-deck
-    ```
+## License
 
-*   **Preview Deck**:
-    ```bash
-    deckbot preview my-deck
-    ```
+This project is licensed under the MIT License. See the LICENSE file for details.
 
-### In the Assistant (Text REPL)
+---
 
-When using text mode (`deckbot --text` or `deckbot load my-deck`):
-
-*   **Chat**: "Add a slide about our Q3 goals."
-*   **Generate Images**: "Generate a futuristic cityscape image for the title slide." (or use `/image <prompt>`)
-*   **Show Work**: "Show me the deck" (prints a summary).
-*   **Preview**: "Preview the presentation" (opens the HTML preview).
-*   **Export**: "Export to PDF" (saves a PDF version).
+<p align="center">
+  <i>Built with ❤️, Python, and Gemini. ((And Claude.  And GPT.)</i>
+</p>
