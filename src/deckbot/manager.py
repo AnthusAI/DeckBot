@@ -10,8 +10,8 @@ class PresentationManager:
         if root_dir:
             self.root_dir = root_dir
         else:
-            # Priority order: VIBE_PRESENTATION_ROOT env var, local presentations/ folder, ~/.vibe_presentation
-            env_root = os.environ.get('VIBE_PRESENTATION_ROOT')
+            # Priority order: DECKBOT_PRESENTATION_ROOT env var, local presentations/ folder, ~/.deckbot
+            env_root = os.environ.get('DECKBOT_PRESENTATION_ROOT')
             if env_root:
                 self.root_dir = env_root
             else:
@@ -19,7 +19,7 @@ class PresentationManager:
                 if os.path.exists(local_presentations):
                     self.root_dir = local_presentations
                 else:
-                    self.root_dir = os.path.expanduser("~/.vibe_presentation")
+                    self.root_dir = os.path.expanduser("~/.deckbot")
         
         if not os.path.exists(self.root_dir):
             os.makedirs(self.root_dir)

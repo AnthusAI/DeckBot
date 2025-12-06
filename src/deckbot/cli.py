@@ -5,6 +5,7 @@ from rich.console import Console
 from rich.prompt import Prompt, IntPrompt
 from deckbot.manager import PresentationManager
 from deckbot.repl import start_repl
+from deckbot.utils import get_marp_command
 
 console = Console()
 
@@ -101,7 +102,9 @@ def cli(ctx, resume, text, web, port):
             from deckbot.webapp import app, set_backend_url
             set_backend_url(port)
             console.print(f"[green]Starting Web UI on http://localhost:{port}[/green]")
-            app.run(port=port, debug=True)
+            # Disable debug mode when running from PyInstaller bundle (auto-reload doesn't work)
+            debug_mode = not getattr(sys, 'frozen', False)
+            app.run(port=port, debug=debug_mode)
         except ImportError:
             console.print("[red]Error: Flask not installed. Please run: pip install flask[/red]")
         except Exception as e:
@@ -235,10 +238,10 @@ def build(name, format):
     output_file = os.path.join(presentation_dir, output_filename)
     
     console.print(f"[green]Building {format.upper()} for {name}...[/green]")
-    
-    # Command: npx @marp-team/marp-cli input_file -o output_file
-    cmd = ["npx", "@marp-team/marp-cli", input_file, "-o", output_file]
-    
+
+    # Command: Use bundled Node.js if in Electron app, otherwise use system npx
+    cmd = get_marp_command(input_file, "-o", output_file)
+
     # Add specific flags if needed
     if format == 'pdf':
         cmd.append("--allow-local-files") # often needed for images
@@ -268,9 +271,11 @@ def preview(name):
     
     console.print(f"[green]Starting Marp preview for {name}...[/green]")
     console.print("Press Ctrl+C to stop.")
-    
+
     try:
-        subprocess.run(["npx", "@marp-team/marp-cli", "-s", presentation_dir], check=True)
+        # Use bundled Node.js if in Electron app, otherwise use system npx
+        cmd = get_marp_command("-s", presentation_dir)
+        subprocess.run(cmd, check=True)
     except KeyboardInterrupt:
         console.print("\nStopped preview.")
     except subprocess.CalledProcessError as e:

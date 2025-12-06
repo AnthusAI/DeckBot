@@ -82,6 +82,28 @@ If DeckBot isn't what you're looking for, there is a crowded market of alternati
 
 ## Installation
 
+### Desktop App (Mac/Windows)
+
+DeckBot is available as a standalone desktop application that bundles everything you need - no Python, Node.js, or other dependencies required.
+
+**Download:** [Latest Release](https://github.com/AnthusAI/DeckBot/releases)
+
+**Mac:**
+1. Download `DeckBot-{version}-mac.dmg`
+2. Open the DMG and drag DeckBot to Applications
+3. Right-click → Open (required for unsigned apps)
+4. Configure your API keys in Preferences → API Keys
+
+**Windows:**
+1. Download `DeckBot-Setup-{version}.exe`
+2. Run the installer
+3. Launch DeckBot from Start Menu
+4. Configure your API keys in Preferences → API Keys
+
+### Command Line (Python)
+
+For developers or CLI users, install DeckBot via pip:
+
 1.  **Clone and Environment Setup:**
     ```bash
     conda create -n deckbot python=3.11
@@ -165,6 +187,62 @@ Run tests:
 ```bash
 behave
 ```
+
+### Building the Desktop App
+
+The Electron desktop app bundles Python (via PyInstaller), Node.js (for Marp CLI), and the web UI into a standalone application.
+
+**Prerequisites:**
+- Python 3.11 with conda environment
+- Node.js 20+ and npm
+- PyInstaller: `pip install pyinstaller`
+- Electron Builder dependencies
+
+**Build for Mac (ARM64):**
+```bash
+# 1. Build Python backend bundle
+conda activate deckbot
+/opt/anaconda3/envs/py311/bin/pyinstaller build/deckbot.spec --clean
+
+# 2. Copy to Electron resources
+rm -rf electron/resources/python
+cp -r dist/deckbot electron/resources/python
+
+# 3. Build Electron app
+npm install
+npx electron-builder --mac --arm64
+
+# Output: dist/mac-arm64/DeckBot.app
+```
+
+**Build DMG for distribution:**
+```bash
+npx electron-builder --mac --arm64
+# Output: dist/DeckBot-{version}-mac-arm64.dmg
+```
+
+**Build for Windows:**
+```bash
+# Same steps, but:
+npx electron-builder --win --x64
+# Output: dist/DeckBot Setup {version}.exe
+```
+
+**Development mode (no bundling):**
+```bash
+# Run Python backend in dev mode
+deckbot --web --port 5555
+
+# Run Electron in dev mode (in separate terminal)
+npm run dev
+```
+
+**Key files:**
+- `electron/main.js` - Main Electron process
+- `electron/python-manager.js` - Python subprocess management
+- `build/deckbot.spec` - PyInstaller configuration
+- `build/build-nodejs.js` - Node.js bundling script
+- `package.json` - Electron build configuration
 
 ## Contributing
 

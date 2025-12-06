@@ -12,6 +12,7 @@ from deckbot.nano_banana import NanoBananaClient
 from deckbot.manager import PresentationManager
 from deckbot.deck_validator import DeckValidator
 from deckbot.visual_qa import VisualQA
+from deckbot.utils import get_marp_command
 
 console = Console()
 
@@ -168,8 +169,9 @@ class PresentationTools:
         
         console.print(f"[green]Previewing template '{template_name}'...[/green]")
         try:
-            # Reuse standard Marp build
-            subprocess.run(["npx", "@marp-team/marp-cli", "deck.marp.md", "--allow-local-files"], cwd=template_path, check=True)
+            # Reuse standard Marp build with bundled Node.js
+            cmd = get_marp_command("deck.marp.md", "--allow-local-files")
+            subprocess.run(cmd, cwd=template_path, check=True)
             
             html_file = os.path.join(template_path, "deck.marp.html")
             if os.path.exists(html_file):
@@ -697,7 +699,9 @@ class PresentationTools:
         console.print(f"[green]Compiling presentation in {self.presentation_dir}...[/green]")
         try:
             # Use --allow-local-files to support absolute paths or images outside working dir if needed
-            subprocess.run(["npx", "@marp-team/marp-cli", "deck.marp.md", "--allow-local-files"], cwd=self.presentation_dir, check=True)
+            # Use bundled Node.js if in Electron app
+            cmd = get_marp_command("deck.marp.md", "--allow-local-files")
+            subprocess.run(cmd, cwd=self.presentation_dir, check=True)
             
             # Post-process HTML to inject IDs for navigation if missing
             # This ensures #1, #2, etc. work in both Web UI and local open
@@ -762,7 +766,9 @@ class PresentationTools:
             # Ensure Chrome/Chromium is installed or managed by user environment
             # Use --allow-local-files to support local images in PDF export
             # Use -o to specify output filename
-            subprocess.run(["npx", "@marp-team/marp-cli", "deck.marp.md", "--pdf", "--allow-local-files", "-o", pdf_filename], cwd=self.presentation_dir, check=True)
+            # Use bundled Node.js if in Electron app
+            cmd = get_marp_command("deck.marp.md", "--pdf", "--allow-local-files", "-o", pdf_filename)
+            subprocess.run(cmd, cwd=self.presentation_dir, check=True)
             
             pdf_file = os.path.join(self.presentation_dir, pdf_filename)
             if os.path.exists(pdf_file):

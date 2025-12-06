@@ -65,13 +65,20 @@ def after_scenario(context, scenario):
     # Clean up patches
     if hasattr(context, 'new_genai_client_patch'):
         context.new_genai_client_patch.stop()
-    
+
+    # Clean up secrets patch if it exists (from model tests)
+    if hasattr(context, 'secrets_patch'):
+        try:
+            context.secrets_patch.stop()
+        except:
+            pass
+
     # Clean up any preferences files created during tests
     from pathlib import Path
     prefs_file = Path('.deckbot.yaml')
     if prefs_file.exists():
         prefs_file.unlink()
-    
+
     # Reset webapp global state
     try:
         from deckbot import webapp

@@ -24,3 +24,7 @@ def step_impl(context, text):
             break
     assert found, f"Expected output '{text}' not found in print calls"
 
+def after_scenario(context, scenario):
+    # Clean up secrets mock if it was created
+    if hasattr(context, 'secrets_patch'):
+        context.secrets_patch.stop()

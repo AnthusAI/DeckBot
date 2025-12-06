@@ -9,23 +9,52 @@ from google.api_core import exceptions
 
 @given('a config file with:')
 def step_impl(context):
+    # Mock SecretsManager to return test profile with model config
+    from unittest.mock import patch, MagicMock
+    from deckbot.secrets import SecretsManager
+
     config = yaml.safe_load(context.text)
-    config_path = os.path.join(os.getcwd(), '.deckbot.yaml')
-    with open(config_path, 'w') as f:
-        yaml.dump(config, f)
-    context.config_path = config_path
+
+    # Create a mock profile with the model config
+    mock_profile = {
+        'name': 'test-profile',
+        'api_key': os.getenv('GOOGLE_API_KEY', 'test-key'),
+        'model_config': config
+    }
+
+    # Create mock SecretsManager
+    mock_secrets = MagicMock(spec=SecretsManager)
+    mock_secrets.get_active_profile.return_value = mock_profile
+
+    # Patch SecretsManager where it's imported
+    context.secrets_patch = patch('deckbot.secrets.SecretsManager', return_value=mock_secrets)
+    context.secrets_patch.start()
 
 @given('the agent is configured with:')
 def step_impl(context):
+    # Mock SecretsManager to return test profile with model config
+    from unittest.mock import patch, MagicMock
+    from deckbot.secrets import SecretsManager
+
     config = {}
     for row in context.table:
         config[row['setting']] = row['value']
-    
-    config_path = os.path.join(os.getcwd(), '.deckbot.yaml')
-    with open(config_path, 'w') as f:
-        yaml.dump(config, f)
-    context.config_path = config_path
-    
+
+    # Create a mock profile with the model config
+    mock_profile = {
+        'name': 'test-profile',
+        'api_key': os.getenv('GOOGLE_API_KEY', 'test-key'),
+        'model_config': config
+    }
+
+    # Create mock SecretsManager
+    mock_secrets = MagicMock(spec=SecretsManager)
+    mock_secrets.get_active_profile.return_value = mock_profile
+
+    # Patch SecretsManager where it's imported
+    context.secrets_patch = patch('deckbot.secrets.SecretsManager', return_value=mock_secrets)
+    context.secrets_patch.start()
+
     # Initialize agent
     context.agent = Agent({'name': 'FallbackTest'}, root_dir=context.temp_dir)
     # Mock the client to avoid real calls
@@ -60,9 +89,24 @@ def step_impl(context):
 
 @given('no specific model configuration exists')
 def step_impl(context):
-    config_path = os.path.join(os.getcwd(), '.deckbot.yaml')
-    if os.path.exists(config_path):
-        os.remove(config_path)
+    # Mock SecretsManager to return profile with empty model config
+    from unittest.mock import patch, MagicMock
+    from deckbot.secrets import SecretsManager
+
+    # Create a mock profile with no model config
+    mock_profile = {
+        'name': 'test-profile',
+        'api_key': os.getenv('GOOGLE_API_KEY', 'test-key'),
+        'model_config': {}
+    }
+
+    # Create mock SecretsManager
+    mock_secrets = MagicMock(spec=SecretsManager)
+    mock_secrets.get_active_profile.return_value = mock_profile
+
+    # Patch SecretsManager where it's imported
+    context.secrets_patch = patch('deckbot.secrets.SecretsManager', return_value=mock_secrets)
+    context.secrets_patch.start()
 
 @when('the agent is initialized')
 def step_impl(context):
@@ -128,4 +172,7 @@ def step_impl(context):
     # Check response content
     assert context.response == "Success after retry", f"Expected 'Success after retry', got '{context.response}'"
 
-
+def after_scenario(context, scenario):
+    # Clean up secrets mock if it was created
+    if hasattr(context, 'secrets_patch'):
+        context.secrets_patch.stop()

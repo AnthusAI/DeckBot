@@ -58,3 +58,12 @@ debug_*.py
 # Backup and temporary files
 *.bak
 *.tmp
+
+# Electron build artifacts
+electron/resources/python/
+electron/resources/nodejs/
+downloads/
+*.dmg
+*.exe
+*.app
+*.test_backup
