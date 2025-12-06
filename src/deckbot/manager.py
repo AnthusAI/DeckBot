@@ -48,12 +48,18 @@ class PresentationManager:
         
         if template:
             # Create from template
+            import logging
+            logging.debug(f"Creating presentation from template: {template}")
+            print(f"DEBUG: Creating from template '{template}'")
+            
             template_path = os.path.join(self.templates_dir, template)
             if not os.path.exists(template_path):
                 raise ValueError(f"Template '{template}' not found.")
             
+            print(f"DEBUG: Template path exists: {template_path}")
             import shutil
             shutil.copytree(template_path, presentation_dir)
+            print(f"DEBUG: copytree completed for {template_path} -> {presentation_dir}")
             
             # Update metadata - preserve ALL template fields
             metadata_path = os.path.join(presentation_dir, "metadata.json")
@@ -98,24 +104,30 @@ class PresentationManager:
                 json.dump(metadata, f, indent=2)
             
             # Explicitly ensure template-specific images are copied (style.png, background.png, etc.)
-            # copytree should have copied them, but we verify and copy if missing (defensive)
+            # copytree should have copied them, but we ALWAYS copy to ensure they're present
             template_images_dir = os.path.join(template_path, "images")
             presentation_images_dir = os.path.join(presentation_dir, "images")
             os.makedirs(presentation_images_dir, exist_ok=True)
             
             # Copy style.png if it exists (convention-based style reference)
-            # Always copy to ensure it's present (copytree should have copied it, but be defensive)
+            # ALWAYS copy (even if it already exists) to ensure it's present
             template_style_png = os.path.join(template_images_dir, "style.png")
             presentation_style_png = os.path.join(presentation_images_dir, "style.png")
             if os.path.exists(template_style_png):
-                shutil.copy2(template_style_png, presentation_style_png)
+                try:
+                    shutil.copy2(template_style_png, presentation_style_png)
+                except Exception as e:
+                    print(f"Warning: Could not copy style.png: {e}")
             
             # Copy background.png if it exists (for slide backgrounds)
-            # Always copy to ensure it's present (copytree should have copied it, but be defensive)
+            # ALWAYS copy (even if it already exists) to ensure it's present
             template_background_png = os.path.join(template_images_dir, "background.png")
             presentation_background_png = os.path.join(presentation_images_dir, "background.png")
             if os.path.exists(template_background_png):
-                shutil.copy2(template_background_png, presentation_background_png)
+                try:
+                    shutil.copy2(template_background_png, presentation_background_png)
+                except Exception as e:
+                    print(f"Warning: Could not copy background.png: {e}")
             
             # Copy default layouts if template doesn't have layouts.md
             # NOTE: We should NOT modify the deck file if the template already has a complete deck
@@ -624,6 +636,48 @@ paginate: true
                     
                     with open(marp_path, "w") as f:
                         f.write(new_content)
+        
+        return self.get_presentation(name)
+    
+    def set_presentation_color_settings(self, name, color_settings):
+        """Update the presentation color settings in metadata.json."""
+        path = os.path.join(self.root_dir, name)
+        if not os.path.exists(path):
+            raise ValueError(f"Presentation '{name}' not found.")
+        
+        # Update metadata
+        metadata_path = os.path.join(path, "metadata.json")
+        metadata = {}
+        if os.path.exists(metadata_path):
+            with open(metadata_path, "r") as f:
+                metadata = json.load(f)
+        
+        metadata['color_settings'] = color_settings
+        metadata['updated_at'] = datetime.now().isoformat()
+        
+        with open(metadata_path, "w") as f:
+            json.dump(metadata, f, indent=2)
+        
+        return self.get_presentation(name)
+    
+    def set_presentation_font_settings(self, name, font_settings):
+        """Update the presentation font settings in metadata.json."""
+        path = os.path.join(self.root_dir, name)
+        if not os.path.exists(path):
+            raise ValueError(f"Presentation '{name}' not found.")
+        
+        # Update metadata
+        metadata_path = os.path.join(path, "metadata.json")
+        metadata = {}
+        if os.path.exists(metadata_path):
+            with open(metadata_path, "r") as f:
+                metadata = json.load(f)
+        
+        metadata['font_settings'] = font_settings
+        metadata['updated_at'] = datetime.now().isoformat()
+        
+        with open(metadata_path, "w") as f:
+            json.dump(metadata, f, indent=2)
         
         return self.get_presentation(name)
     

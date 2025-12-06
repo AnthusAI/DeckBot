@@ -57,6 +57,28 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnRemoveRefImage = document.getElementById('btn-remove-ref-image');
     const btnSaveStyle = document.getElementById('btn-save-style');
     
+    // Style view tabs
+    const styleTabs = document.querySelectorAll('.style-tab');
+    const styleTabContents = document.querySelectorAll('.style-tab-content');
+    const stylePresTitle = document.getElementById('style-pres-title');
+    const stylePresDescription = document.getElementById('style-pres-description');
+    const stylePresAspectRatio = document.getElementById('style-pres-aspect-ratio');
+    const styleColorPrimary = document.getElementById('style-color-primary');
+    const styleColorSecondary = document.getElementById('style-color-secondary');
+    const styleColorAccent = document.getElementById('style-color-accent');
+    const styleColorDanger = document.getElementById('style-color-danger');
+    const styleColorMuted = document.getElementById('style-color-muted');
+    const styleColorForeground = document.getElementById('style-color-foreground');
+    const styleColorBackground = document.getElementById('style-color-background');
+    const styleFontPrimary = document.getElementById('style-font-primary');
+    const styleFontSecondary = document.getElementById('style-font-secondary');
+    const fontPrimaryPreview = document.getElementById('font-primary-preview');
+    const fontSecondaryPreview = document.getElementById('font-secondary-preview');
+    const googleFontsList = document.getElementById('google-fonts-list');
+    const btnSavePresentationSettings = document.getElementById('btn-save-presentation-settings');
+    const presentationAgentPrompts = document.getElementById('presentation-agent-prompts');
+    const imageAgentPrompts = document.getElementById('image-agent-prompts');
+    
     // Preferences elements
     const preferencesModal = document.getElementById('preferences-modal');
     const prefTheme = document.getElementById('pref-theme');
@@ -94,12 +116,16 @@ document.addEventListener('DOMContentLoaded', () => {
     // ===== State Management (localStorage) =====
     const AppState = {
         get presentation() {
-            return localStorage.getItem('deckbot_current_presentation');
+            const value = localStorage.getItem('deckbot_current_presentation');
+            console.log('[APPSTATE] GET presentation:', value);
+            return value;
         },
         set presentation(name) {
+            console.log('[APPSTATE] SET presentation:', name);
             if (name) {
                 try {
                     localStorage.setItem('deckbot_current_presentation', name);
+                    console.log('[APPSTATE] ✓ Saved presentation to localStorage');
                 } catch (e) {
                     if (e.name === 'QuotaExceededError') {
                         console.error('localStorage full. Please clear browser data.');
@@ -109,14 +135,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             } else {
                 localStorage.removeItem('deckbot_current_presentation');
+                console.log('[APPSTATE] ✓ Cleared presentation from localStorage');
             }
         },
         get slide() {
-            return parseInt(localStorage.getItem('deckbot_current_slide') || '1');
+            const value = parseInt(localStorage.getItem('deckbot_current_slide') || '1');
+            console.log('[APPSTATE] GET slide:', value);
+            return value;
         },
         set slide(number) {
+            console.log('[APPSTATE] SET slide:', number);
             try {
                 localStorage.setItem('deckbot_current_slide', String(number));
+                console.log('[APPSTATE] ✓ Saved slide to localStorage');
             } catch (e) {
                 if (e.name === 'QuotaExceededError') {
                     console.error('localStorage full. Please clear browser data.');
@@ -126,8 +157,10 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         },
         clear() {
+            console.log('[APPSTATE] CLEAR all localStorage');
             localStorage.removeItem('deckbot_current_presentation');
             localStorage.removeItem('deckbot_current_slide');
+            console.log('[APPSTATE] ✓ Cleared all from localStorage');
         }
     };
 
@@ -586,6 +619,7 @@ document.addEventListener('DOMContentLoaded', () => {
             e.stopPropagation();
             // Pre-fill template in create modal and show template display
             document.getElementById('new-pres-template').value = template.name;
+            document.getElementById('new-pres-template-value').value = template.name; // Store in hidden input
             document.getElementById('selected-template-name').textContent = template.name;
             document.getElementById('new-pres-template').style.display = 'none';
             document.getElementById('template-display').classList.remove('hidden');
@@ -602,6 +636,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Click card to use template
         card.onclick = () => {
             document.getElementById('new-pres-template').value = template.name;
+            document.getElementById('new-pres-template-value').value = template.name; // Store in hidden input
             document.getElementById('selected-template-name').textContent = template.name;
             document.getElementById('new-pres-template').style.display = 'none';
             document.getElementById('template-display').classList.remove('hidden');
@@ -1059,7 +1094,7 @@ document.addEventListener('DOMContentLoaded', () => {
         
         console.log('loadStyleView: Loading style info for', currentPresName);
         
-        // Pass presentation name in query param for clarity, though session should handle it
+        // Load style info
         fetch(`/api/presentation/style`)
             .then(res => {
                 if (!res.ok) {
@@ -1118,11 +1153,50 @@ document.addEventListener('DOMContentLoaded', () => {
             .catch(err => {
                 console.error('Failed to load style info:', err);
             });
+        
+        // Load presentation settings
+        fetch('/api/presentation/settings')
+            .then(res => res.json())
+            .then(data => {
+                if (data.error) {
+                    console.error('Error loading settings:', data.error);
+                    return;
+                }
+                
+                if (stylePresTitle) stylePresTitle.value = data.title || '';
+                if (stylePresDescription) stylePresDescription.value = data.description || '';
+                if (stylePresAspectRatio) stylePresAspectRatio.value = data.aspect_ratio || '4:3';
+                
+                // Load color settings
+                const colors = data.color_settings || {};
+                if (styleColorPrimary) styleColorPrimary.value = colors.primary || '#3B82F6';
+                if (styleColorSecondary) styleColorSecondary.value = colors.secondary || '#8B5CF6';
+                if (styleColorAccent) styleColorAccent.value = colors.accent || '#60A5FA';
+                if (styleColorDanger) styleColorDanger.value = colors.danger || '#EF4444';
+                if (styleColorMuted) styleColorMuted.value = colors.muted || '#9CA3AF';
+                if (styleColorForeground) styleColorForeground.value = colors.foreground || '#2C4074';
+                if (styleColorBackground) styleColorBackground.value = colors.background || '#EEE5D3';
+                
+                // Load font settings
+                const fonts = data.font_settings || {};
+                if (styleFontPrimary) {
+                    styleFontPrimary.value = fonts.primary || 'Inter';
+                    updateFontPreview('primary', styleFontPrimary.value);
+                }
+                if (styleFontSecondary) {
+                    styleFontSecondary.value = fonts.secondary || 'Source Serif Pro';
+                    updateFontPreview('secondary', styleFontSecondary.value);
+                }
+            })
+            .catch(err => {
+                console.error('Failed to load settings:', err);
+            });
     }
 
     function saveStyleSettings() {
         if (!currentPresName) return;
         
+        // Save style settings
         const formData = new FormData();
         if (styleInstructions) formData.append('instructions', styleInstructions.value);
         if (styleImagePrompt) formData.append('image_style.prompt', styleImagePrompt.value);
@@ -1131,25 +1205,60 @@ document.addEventListener('DOMContentLoaded', () => {
             formData.append('file', styleRefUpload.files[0]);
         }
         
+        // Save presentation settings
+        const settingsData = {
+            title: stylePresTitle ? stylePresTitle.value : null,
+            description: stylePresDescription ? stylePresDescription.value : null,
+            aspect_ratio: stylePresAspectRatio ? stylePresAspectRatio.value : null,
+            color_settings: {
+                primary: styleColorPrimary ? styleColorPrimary.value : null,
+                secondary: styleColorSecondary ? styleColorSecondary.value : null,
+                accent: styleColorAccent ? styleColorAccent.value : null,
+                danger: styleColorDanger ? styleColorDanger.value : null,
+                muted: styleColorMuted ? styleColorMuted.value : null,
+                foreground: styleColorForeground ? styleColorForeground.value : null,
+                background: styleColorBackground ? styleColorBackground.value : null
+            },
+            font_settings: {
+                primary: styleFontPrimary ? styleFontPrimary.value : null,
+                secondary: styleFontSecondary ? styleFontSecondary.value : null
+            }
+        };
+        
         // Disable button while saving
         if (btnSaveStyle) {
             btnSaveStyle.disabled = true;
             btnSaveStyle.textContent = 'Saving...';
         }
         
-        fetch('/api/presentation/style', {
-            method: 'POST',
-            body: formData // Fetch handles content-type for FormData
-        })
-        .then(res => res.json())
-        .then(data => {
+        // Save both style and settings
+        Promise.all([
+            fetch('/api/presentation/style', {
+                method: 'POST',
+                body: formData
+            }),
+            fetch('/api/presentation/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(settingsData)
+            })
+        ])
+        .then(responses => Promise.all(responses.map(r => r.json())))
+        .then(results => {
             if (btnSaveStyle) {
                 btnSaveStyle.disabled = false;
                 btnSaveStyle.textContent = 'Save Changes';
             }
             
-            if (data.error) {
-                alert('Error saving settings: ' + data.error);
+            const [styleResult, settingsResult] = results;
+            
+            if (styleResult.error) {
+                alert('Error saving style: ' + styleResult.error);
+                return;
+            }
+            
+            if (settingsResult.error) {
+                alert('Error saving settings: ' + settingsResult.error);
                 return;
             }
             
@@ -1159,7 +1268,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // Reset file input
             if (styleRefUpload) styleRefUpload.value = '';
             
-            console.log('Style settings saved');
+            console.log('Style and settings saved');
         })
         .catch(err => {
             if (btnSaveStyle) {
@@ -1168,6 +1277,456 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             alert('Failed to save settings: ' + err);
         });
+    }
+    
+    // Style tab switching
+    if (styleTabs.length > 0) {
+        styleTabs.forEach(tab => {
+            tab.addEventListener('click', () => {
+                const tabName = tab.dataset.tab;
+                
+                // Update active tab
+                styleTabs.forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+                
+                // Update active content
+                styleTabContents.forEach(content => {
+                    content.classList.remove('active');
+                    content.style.display = 'none';
+                });
+                
+                const targetContent = document.getElementById(`style-tab-${tabName}`);
+                if (targetContent) {
+                    targetContent.classList.add('active');
+                    targetContent.style.display = 'block';
+                    
+                    // Load prompts when switching to agent tabs
+                    if (tabName === 'presentation-agent') {
+                        loadPresentationAgentPrompts();
+                    } else if (tabName === 'image-agent') {
+                        loadImageAgentPrompts();
+                    }
+                }
+            });
+        });
+    }
+    
+    function loadPresentationAgentPrompts() {
+        if (!currentPresName) return;
+        
+        // Fetch both prompts and current metadata for processing
+        Promise.all([
+            fetch('/api/presentation/prompts').then(r => r.json()),
+            fetch('/api/presentation/settings').then(r => r.json()),
+            fetch('/api/presentation/style').then(r => r.json())
+        ])
+        .then(([promptsData, settingsData, styleData]) => {
+            if (promptsData.error) {
+                presentationAgentPrompts.innerHTML = `<p style="color: hsl(var(--destructive));">Error: ${promptsData.error}</p>`;
+                return;
+            }
+            
+            const prompts = promptsData.presentation_agent;
+            let html = `
+                <div class="prompt-view-tabs" style="display: flex; border-bottom: 1px solid hsl(var(--border)); margin-bottom: 16px;">
+                    <button class="prompt-view-tab active" data-view="structure">Structure</button>
+                    <button class="prompt-view-tab" data-view="processed">Processed</button>
+                </div>
+                
+                <div class="prompt-view-content">
+                    <div class="prompt-view-structure active">
+                        <div class="prompt-section">
+                            <div class="prompt-section-title">System Prompt Structure</div>
+                            <div class="prompt-section-desc">${prompts.description}</div>
+            `;
+            
+            prompts.sections.forEach(section => {
+                const isEditable = section.source.includes('metadata.json') || section.source.includes('dynamic');
+                html += `
+                    <div class="prompt-item">
+                        <div class="prompt-item-label">${section.name}</div>
+                        <div class="prompt-item-value readonly">${section.description}</div>
+                        <div class="prompt-item-source">Source: ${section.source}</div>
+                        ${isEditable ? '<button class="btn btn-sm btn-secondary edit-settings-btn">Edit Settings</button>' : ''}
+                    </div>
+                `;
+            });
+            
+            html += `
+                        <div class="prompt-item" style="margin-top: 16px;">
+                            <div class="prompt-item-label">Note</div>
+                            <div class="prompt-item-value readonly">${prompts.note}</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="prompt-view-processed" style="display: none;">
+                    <div class="prompt-section">
+                        <div class="prompt-section-title">Full Processed Prompt</div>
+                        <div class="prompt-section-desc">This is what gets sent to the model with current settings</div>
+                        <div class="prompt-item">
+                            <div class="prompt-item-label">System Prompt (Processed)</div>
+                            <div class="prompt-item-value" style="max-height: 600px; overflow-y: auto; white-space: pre-wrap;">[Loading full prompt...]</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            `;
+            
+            presentationAgentPrompts.innerHTML = html;
+            
+            // Add event handlers for edit buttons
+            const editButtons = presentationAgentPrompts.querySelectorAll('.edit-settings-btn');
+            editButtons.forEach(btn => {
+                btn.addEventListener('click', () => {
+                    document.querySelector('.style-tab[data-tab="presentation"]').click();
+                });
+            });
+            
+            // Add tab switching for prompt views
+            const promptViewTabs = presentationAgentPrompts.querySelectorAll('.prompt-view-tab');
+            promptViewTabs.forEach(tab => {
+                tab.addEventListener('click', () => {
+                    promptViewTabs.forEach(t => t.classList.remove('active'));
+                    tab.classList.add('active');
+                    
+                    const view = tab.dataset.view;
+                    const structureView = presentationAgentPrompts.querySelector('.prompt-view-structure');
+                    const processedView = presentationAgentPrompts.querySelector('.prompt-view-processed');
+                    
+                    if (view === 'structure') {
+                        structureView.style.display = 'block';
+                        processedView.style.display = 'none';
+                    } else {
+                        structureView.style.display = 'none';
+                        processedView.style.display = 'block';
+                        // Load actual processed prompt
+                        loadProcessedPresentationPrompt();
+                    }
+                });
+            });
+        })
+        .catch(err => {
+            presentationAgentPrompts.innerHTML = `<p style="color: hsl(var(--destructive));">Failed to load prompts: ${err}</p>`;
+        });
+    }
+    
+    function loadProcessedPresentationPrompt() {
+        // Fetch the actual system prompt from the agent
+        fetch('/api/presentation/agent-prompt')
+            .then(r => r.json())
+            .then(data => {
+                if (data.error) {
+                    return;
+                }
+                
+                const promptValue = presentationAgentPrompts.querySelector('.prompt-view-processed .prompt-item-value');
+                if (promptValue) {
+                    promptValue.textContent = data.system_prompt || 'Not available';
+                }
+            })
+            .catch(err => {
+                console.error('Failed to load processed prompt:', err);
+            });
+    }
+    
+    function loadImageAgentPrompts() {
+        if (!currentPresName) return;
+        
+        fetch('/api/presentation/prompts')
+            .then(res => res.json())
+            .then(data => {
+                if (data.error) {
+                    imageAgentPrompts.innerHTML = `<p style="color: hsl(var(--destructive));">Error: ${data.error}</p>`;
+                    return;
+                }
+                
+                const prompts = data.image_agent;
+                const scenarios = [
+                    {key: 'generating', title: 'Fresh Image Generation', icon: 'image-plus'},
+                    {key: 'remix_slide', title: 'Remix Slide', icon: 'layers'},
+                    {key: 'remix_image', title: 'Remix Image', icon: 'refresh-cw'}
+                ];
+                
+                let html = `
+                    <div class="prompt-view-tabs" style="display: flex; border-bottom: 1px solid hsl(var(--border)); margin-bottom: 16px;">
+                        <button class="prompt-view-tab active" data-view="code">Code</button>
+                        <button class="prompt-view-tab" data-view="processed">Processed</button>
+                    </div>
+                    
+                    <div class="prompt-view-content">
+                        <div class="prompt-view-code active">
+                `;
+                
+                // Code view: Show template structure with edit buttons
+                scenarios.forEach(scenario => {
+                    const promptData = prompts[scenario.key];
+                    html += `
+                        <div class="prompt-scenario">
+                            <div class="prompt-scenario-title">
+                                <i data-lucide="${scenario.icon}" style="width: 18px; height: 18px; margin-right: 8px;"></i>
+                                ${scenario.title}
+                            </div>
+                            <div class="prompt-scenario-desc">${promptData.description}</div>
+                            
+                            <div class="prompt-section" style="margin-bottom: 16px;">
+                                <div class="prompt-section-title">System Instructions</div>
+                                <div class="prompt-section-desc">Template strings from PROMPT_TEMPLATES (nano_banana.py)</div>
+                    `;
+                    
+                    Object.keys(promptData.system_instructions).forEach(key => {
+                        const value = promptData.system_instructions[key];
+                        if (value) {
+                            const isDynamic = value.startsWith('{');
+                            const isEditable = value.includes('metadata.json') || key.includes('style') || key.includes('opinion');
+                            html += `
+                                <div class="prompt-item">
+                                    <div class="prompt-item-label">${key.replace(/_/g, ' ')}</div>
+                                    <div class="prompt-item-value ${!isDynamic ? 'readonly' : ''}">${escapeHtml(value)}</div>
+                                    ${isDynamic ? `<div class="prompt-item-source">Dynamic: ${value}</div>` : ''}
+                                    ${isEditable ? '<button class="btn btn-sm btn-secondary edit-style-btn">Edit Style</button>' : ''}
+                                </div>
+                            `;
+                        }
+                    });
+                    
+                    html += `</div>
+                            
+                            <div class="prompt-section" style="margin-bottom: 16px;">
+                                <div class="prompt-section-title">User Message</div>
+                                <div class="prompt-section-desc">Built from user input + context</div>
+                    `;
+                    
+                    Object.keys(promptData.user_message).forEach(key => {
+                        const value = promptData.user_message[key];
+                        if (value) {
+                            const isDynamic = value.startsWith('{');
+                            const isEditable = value.includes('metadata.json') || key.includes('style');
+                            html += `
+                                <div class="prompt-item">
+                                    <div class="prompt-item-label">${key.replace(/_/g, ' ')}</div>
+                                    <div class="prompt-item-value ${!isDynamic ? 'readonly' : ''}">${escapeHtml(value)}</div>
+                                    ${isDynamic ? `<div class="prompt-item-source">Dynamic: ${value}</div>` : ''}
+                                    ${isEditable ? '<button class="btn btn-sm btn-secondary edit-style-btn">Edit Style</button>' : ''}
+                                </div>
+                            `;
+                        }
+                    });
+                    
+                    html += `</div>
+                            
+                            <div class="prompt-section">
+                                <div class="prompt-section-title">Contents Array Order</div>
+                                <div class="prompt-section-desc">Order of items sent to the Gemini API</div>
+                    `;
+                    
+                    promptData.contents_order.forEach((item, index) => {
+                        html += `
+                            <div class="prompt-item">
+                                <div class="prompt-item-label">${index + 1}</div>
+                                <div class="prompt-item-value readonly">${escapeHtml(item)}</div>
+                            </div>
+                        `;
+                    });
+                    
+                    html += `</div></div>`;
+                });
+                
+                html += `
+                        </div>
+                        
+                        <div class="prompt-view-processed" style="display: none;">
+                            <p style="font-size: 0.9em; opacity: 0.7; margin-bottom: 16px;">
+                                The processed prompts show what would be sent to the model with your current settings.
+                                Enter a test prompt to see how it would be constructed.
+                            </p>
+                            
+                            <div class="form-group" style="margin-bottom: 20px;">
+                                <label style="display: block; margin-bottom: 8px; font-weight: bold;">Test Prompt</label>
+                                <input type="text" id="test-image-prompt" style="width: 100%; padding: 10px;" placeholder="E.g. a blue circle">
+                            </div>
+                            
+                            <div id="processed-prompts-container">
+                                <p style="opacity: 0.6;">Enter a test prompt above to see how it would be processed</p>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                
+                imageAgentPrompts.innerHTML = html;
+                refreshIcons();
+                
+                // Add event handlers for edit buttons
+                const editStyleButtons = imageAgentPrompts.querySelectorAll('.edit-style-btn');
+                editStyleButtons.forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        document.querySelector('.style-tab[data-tab="style"]').click();
+                    });
+                });
+                
+                // Add event listener for test prompt
+                const testPromptInput = document.getElementById('test-image-prompt');
+                if (testPromptInput) {
+                    testPromptInput.addEventListener('input', debounce(() => {
+                        loadProcessedImagePrompts(testPromptInput.value);
+                    }, 500));
+                }
+                
+                // Add tab switching for prompt views
+                const promptViewTabs = imageAgentPrompts.querySelectorAll('.prompt-view-tab');
+                promptViewTabs.forEach(tab => {
+                    tab.addEventListener('click', () => {
+                        promptViewTabs.forEach(t => t.classList.remove('active'));
+                        tab.classList.add('active');
+                        
+                        const view = tab.dataset.view;
+                        const codeView = imageAgentPrompts.querySelector('.prompt-view-code');
+                        const processedView = imageAgentPrompts.querySelector('.prompt-view-processed');
+                        
+                        if (view === 'code') {
+                            codeView.style.display = 'block';
+                            processedView.style.display = 'none';
+                        } else {
+                            codeView.style.display = 'none';
+                            processedView.style.display = 'block';
+                        }
+                    });
+                });
+            })
+            .catch(err => {
+                imageAgentPrompts.innerHTML = `<p style="color: hsl(var(--destructive));">Failed to load prompts: ${err}</p>`;
+            });
+    }
+    
+    function loadProcessedImagePrompts(testPrompt) {
+        if (!testPrompt) {
+            const container = document.getElementById('processed-prompts-container');
+            if (container) {
+                container.innerHTML = '<p style="opacity: 0.6;">Enter a test prompt above to see how it would be processed</p>';
+            }
+            return;
+        }
+        
+        fetch(`/api/presentation/image-prompts?prompt=${encodeURIComponent(testPrompt)}`)
+            .then(r => r.json())
+            .then(data => {
+                if (data.error) {
+                    return;
+                }
+                
+                const container = document.getElementById('processed-prompts-container');
+                if (!container) return;
+                
+                let html = '';
+                Object.keys(data).forEach(scenarioKey => {
+                    const scenario = data[scenarioKey];
+                    html += `
+                        <div class="prompt-scenario">
+                            <div class="prompt-scenario-title">${scenarioKey === 'generating' ? 'Fresh Image Generation' : scenarioKey === 'remix_slide' ? 'Remix Slide' : 'Remix Image'}</div>
+                            
+                            <div class="prompt-section" style="margin-bottom: 16px;">
+                                <div class="prompt-section-title">System Instructions (Processed)</div>
+                                <div class="prompt-item">
+                                    <div class="prompt-item-value" style="white-space: pre-wrap;">${escapeHtml(scenario.system_message)}</div>
+                                </div>
+                            </div>
+                            
+                            <div class="prompt-section">
+                                <div class="prompt-section-title">User Message (Processed)</div>
+                                <div class="prompt-item">
+                                    <div class="prompt-item-value" style="white-space: pre-wrap;">${escapeHtml(scenario.user_message)}</div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                });
+                
+                container.innerHTML = html;
+            })
+            .catch(err => {
+                console.error('Failed to load processed prompts:', err);
+            });
+    }
+    
+    function debounce(func, wait) {
+        let timeout;
+        return function executedFunction(...args) {
+            const later = () => {
+                clearTimeout(timeout);
+                func(...args);
+            };
+            clearTimeout(timeout);
+            timeout = setTimeout(later, wait);
+        };
+    }
+    
+    // Popular Google Fonts for autocomplete
+    const popularGoogleFonts = [
+        'Inter', 'Roboto', 'Open Sans', 'Lato', 'Montserrat', 'Oswald', 'Source Sans Pro',
+        'Raleway', 'PT Sans', 'Merriweather', 'Ubuntu', 'Playfair Display', 'Nunito',
+        'Roboto Condensed', 'Roboto Slab', 'Poppins', 'Noto Sans', 'Mukta', 'Rubik',
+        'Work Sans', 'Fira Sans', 'Quicksand', 'Karla', 'Crimson Text', 'Libre Baskerville',
+        'Source Serif Pro', 'Inconsolata', 'Archivo', 'Bebas Neue', 'Oxygen', 'PT Serif',
+        'Heebo', 'Bitter', 'Cabin', 'Abril Fatface', 'Dancing Script', 'Pacifico',
+        'Lobster', 'Righteous', 'Comfortaa', 'Permanent Marker', 'Anton', 'Fjalla One',
+        'Shadows Into Light', 'Arvo', 'Josefin Sans', 'DM Sans', 'Barlow', 'Manrope',
+        'Space Grotesk', 'Red Hat Display', 'Plus Jakarta Sans', 'Sora', 'Outfit'
+    ];
+    
+    // Populate font datalist
+    function populateFontList() {
+        if (!googleFontsList) return;
+        
+        popularGoogleFonts.forEach(font => {
+            const option = document.createElement('option');
+            option.value = font;
+            googleFontsList.appendChild(option);
+        });
+    }
+    
+    // Update font preview
+    function updateFontPreview(type, fontName) {
+        if (!fontName || fontName.trim() === '') {
+            if (type === 'primary' && fontPrimaryPreview) {
+                fontPrimaryPreview.style.display = 'none';
+            } else if (type === 'secondary' && fontSecondaryPreview) {
+                fontSecondaryPreview.style.display = 'none';
+            }
+            return;
+        }
+        
+        const preview = type === 'primary' ? fontPrimaryPreview : fontSecondaryPreview;
+        if (!preview) return;
+        
+        // Load the font from Google Fonts
+        const fontFamily = fontName.trim();
+        const linkId = `google-font-preview-${type}`;
+        
+        // Remove old link if exists
+        const oldLink = document.getElementById(linkId);
+        if (oldLink) {
+            oldLink.remove();
+        }
+        
+        // Add new font link
+        const link = document.createElement('link');
+        link.id = linkId;
+        link.rel = 'stylesheet';
+        link.href = `https://fonts.googleapis.com/css2?family=${encodeURIComponent(fontFamily)}:wght@400;700&display=swap`;
+        document.head.appendChild(link);
+        
+        // Update preview
+        preview.style.fontFamily = `'${fontFamily}', sans-serif`;
+        preview.style.display = 'block';
+    }
+    
+    // Initialize font list on load
+    populateFontList();
+    
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
     }
 
     function renderFileTree(files) {
@@ -1543,6 +2102,32 @@ document.addEventListener('DOMContentLoaded', () => {
     if (btnSaveStyle) {
         btnSaveStyle.addEventListener('click', saveStyleSettings);
     }
+    
+    if (btnSavePresentationSettings) {
+        btnSavePresentationSettings.addEventListener('click', saveStyleSettings);
+    }
+    
+    // Font preview handlers
+    if (styleFontPrimary) {
+        styleFontPrimary.addEventListener('input', debounce(() => {
+            updateFontPreview('primary', styleFontPrimary.value);
+        }, 300));
+        
+        styleFontPrimary.addEventListener('change', () => {
+            updateFontPreview('primary', styleFontPrimary.value);
+        });
+    }
+    
+    if (styleFontSecondary) {
+        styleFontSecondary.addEventListener('input', debounce(() => {
+            updateFontPreview('secondary', styleFontSecondary.value);
+        }, 300));
+        
+        styleFontSecondary.addEventListener('change', () => {
+            updateFontPreview('secondary', styleFontSecondary.value);
+        });
+    }
+    
     if (btnRemoveRefImage) {
         btnRemoveRefImage.addEventListener('click', (e) => {
             e.preventDefault(); // Prevent any form submit
@@ -1670,10 +2255,12 @@ document.addEventListener('DOMContentLoaded', () => {
     // Sidebar always shows preview now (no view switching needed)
 
     function reloadPreview(slideNumber) {
+        console.log('[PREVIEW] reloadPreview called with slide:', slideNumber);
         let url = `/api/presentation/preview?t=${new Date().getTime()}`;
         if (slideNumber) {
             url += `#${slideNumber}`;
             AppState.slide = slideNumber; // Store in localStorage
+            console.log('[PREVIEW] Updated AppState.slide to:', slideNumber);
         }
         previewFrame.src = url;
     }
@@ -2001,10 +2588,13 @@ document.addEventListener('DOMContentLoaded', () => {
         refreshIcons();
     }
 
-    function loadPresentation(name) {
+    function loadPresentation(name, preserveSlide = false) {
+        console.log('[LOAD] Starting loadPresentation for:', name, 'preserveSlide:', preserveSlide);
         // Store in frontend state
         AppState.presentation = name;
-        AppState.slide = 1; // Reset to slide 1 on load
+        if (!preserveSlide) {
+            AppState.slide = 1; // Reset to slide 1 on load (unless preserving)
+        }
 
         fetch('/api/load', {
             method: 'POST',
@@ -2100,6 +2690,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 });
             }
+        })
+        .catch(err => {
+            console.error('[LOAD] Error loading presentation:', err);
+            alert(`Failed to load presentation "${name}": ${err.message}`);
+            // Show welcome screen on error
+            showWelcomeScreen();
         });
     }
 
@@ -2117,7 +2713,7 @@ document.addEventListener('DOMContentLoaded', () => {
         
         const name = document.getElementById('new-pres-name').value;
         const description = document.getElementById('new-pres-desc').value;
-        const template = document.getElementById('new-pres-template').value;
+        const template = document.getElementById('new-pres-template-value').value || document.getElementById('new-pres-template').value;
         
         fetch('/api/presentations/create', {
             method: 'POST',
@@ -2427,20 +3023,42 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function sendMessage() {
+        console.log('[SEND] sendMessage called');
         const text = messageInput.value.trim();
-        if (!text && uploadedImages.length === 0) return;
+        if (!text && uploadedImages.length === 0) {
+            console.log('[SEND] Empty message, returning');
+            return;
+        }
+
+        console.log('[SEND] Message text:', text);
+
+        // Check if SSE connection is definitely closed (not just connecting)
+        if (!evtSource || evtSource.readyState === EventSource.CLOSED) {
+            console.error('[SEND] Cannot send message: SSE connection closed. ReadyState:', evtSource?.readyState);
+            appendSystemMessage('⚠️ Cannot send message - connection lost. Please wait for reconnection...');
+            return;
+        }
+
+        // Warn if still connecting but allow message to go through
+        if (evtSource.readyState === EventSource.CONNECTING) {
+            console.warn('[SEND] Sending message while connection is still establishing (readyState: 0)');
+        }
 
         // Get current state
         const presentationName = AppState.presentation;
         const currentSlide = AppState.slide;
 
+        console.log('[SEND] Presentation:', presentationName, 'Slide:', currentSlide);
+
         if (!presentationName) {
+            console.error('[SEND] No presentation loaded!');
             alert('No presentation loaded');
             return;
         }
 
         // Upload images first if any
         if (uploadedImages.length > 0) {
+            console.log('[SEND] Sending with images...');
             const formData = new FormData();
             formData.append('message', text || '');
             formData.append('presentation_name', presentationName);
@@ -2449,12 +3067,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 formData.append(`image_${index}`, file);
             });
 
+            console.log('[SEND] Fetching /api/chat with form data...');
             fetch('/api/chat', {
                 method: 'POST',
                 body: formData
             })
-            .then(r => r.json())
+            .then(r => {
+                console.log('[SEND] Response status:', r.status);
+                return r.json();
+            })
             .then(data => {
+                console.log('[SEND] Response data:', data);
                 if (data.response) {
                     // Response will come via SSE
                 }
@@ -2463,10 +3086,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 updateImagePreviews();
             })
             .catch(err => {
-                console.error('Error sending message with images:', err);
+                console.error('[SEND] Error sending message with images:', err);
                 alert('Error sending message. Please try again.');
             });
         } else {
+            console.log('[SEND] Fetching /api/chat with JSON...');
             fetch('/api/chat', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
@@ -2476,11 +3100,19 @@ document.addEventListener('DOMContentLoaded', () => {
                     current_slide: currentSlide
                 })
             })
-            .then(r => r.json())
+            .then(r => {
+                console.log('[SEND] Response status:', r.status);
+                return r.json();
+            })
             .then(data => {
+                console.log('[SEND] Response data:', data);
                 if (data.response) {
                     // Response will come via SSE
                 }
+            })
+            .catch(err => {
+                console.error('[SEND] Error:', err);
+                alert('Error sending message. Please try again.');
             });
         }
 
@@ -2566,123 +3198,298 @@ document.addEventListener('DOMContentLoaded', () => {
     // ===== Server-Sent Events with Reconnection =====
     let evtSource = null;
     let reconnectAttempts = 0;
-    let maxReconnectDelay = 30000; // 30 seconds max
+    let reconnectDelay = 5000; // Always 5 seconds
     let reconnectTimeout = null;
     let countdownInterval = null;
+    let reconnectionMessageDiv = null;
+    let isReconnecting = false;
+    let connectionTimeout = null;
 
     function connectSSE() {
+        console.log(`[SSE] connectSSE called (attempt ${reconnectAttempts + 1})`);
+
         // Clear any existing timeout and countdown
         if (reconnectTimeout) {
+            console.log('[SSE] Clearing existing reconnect timeout');
             clearTimeout(reconnectTimeout);
             reconnectTimeout = null;
         }
         if (countdownInterval) {
+            console.log('[SSE] Clearing existing countdown interval');
             clearInterval(countdownInterval);
             countdownInterval = null;
+        }
+        if (connectionTimeout) {
+            console.log('[SSE] Clearing existing connection timeout');
+            clearTimeout(connectionTimeout);
+            connectionTimeout = null;
         }
 
         // Close existing connection if any
         if (evtSource) {
-            console.log('Closing existing EventSource, readyState:', evtSource.readyState);
-            evtSource.close();
+            console.log('[SSE] Closing existing EventSource, readyState:', evtSource.readyState);
+            try {
+                evtSource.close();
+            } catch (e) {
+                console.error('[SSE] Error closing EventSource:', e);
+            }
             evtSource = null;
         }
 
-        console.log('Creating new EventSource connection to /events...');
+        console.log('[SSE] Creating new EventSource to /events');
 
         try {
             evtSource = new EventSource('/events');
+            console.log('[SSE] EventSource created, initial readyState:', evtSource.readyState);
 
-            evtSource.onopen = () => {
-                console.log('SSE connection opened successfully');
-                reconnectAttempts = 0; // Reset on successful connection
-                hideConnectionStatus();
+            // Set a timeout to detect stuck connections
+            connectionTimeout = setTimeout(() => {
+                if (evtSource && evtSource.readyState === EventSource.CONNECTING) {
+                    console.error('[SSE] Connection timeout - still in CONNECTING state after 10s');
+                    console.error('[SSE] Forcing reconnection...');
+                    evtSource.close();
+
+                    // Trigger reconnection logic
+                    if (!reconnectTimeout) {
+                        scheduleReconnect();
+                    }
+                }
+            }, 10000); // 10 second timeout
+
+            evtSource.onopen = (event) => {
+                console.log('[SSE] onopen fired! ReadyState:', evtSource.readyState);
+
+                // Clear connection timeout since we successfully connected
+                if (connectionTimeout) {
+                    clearTimeout(connectionTimeout);
+                    connectionTimeout = null;
+                }
+
+                reconnectAttempts = 0;
+                isReconnecting = false;
+
+                // Show success message if we were reconnecting
+                if (reconnectionMessageDiv) {
+                    console.log('[SSE] Showing reconnection success message');
+                    showReconnectionSuccess();
+                } else {
+                    console.log('[SSE] Initial connection established');
+                }
             };
 
             evtSource.onerror = (error) => {
-                console.error('SSE error event fired. ReadyState:', evtSource.readyState, 'Error:', error);
+                console.error('[SSE] onerror fired. ReadyState:', evtSource.readyState);
+                console.error('[SSE] Error event:', error);
+                console.error('[SSE] reconnectTimeout exists?', !!reconnectTimeout);
+                console.error('[SSE] isReconnecting?', isReconnecting);
+
+                // Clear connection timeout since we got an error
+                if (connectionTimeout) {
+                    clearTimeout(connectionTimeout);
+                    connectionTimeout = null;
+                }
 
                 // Only schedule reconnection if we haven't already
                 if (reconnectTimeout) {
-                    console.log('Reconnection already scheduled, ignoring this error event');
+                    console.log('[SSE] Reconnection already scheduled, ignoring this error event');
                     return;
                 }
 
-                if (evtSource) {
-                    evtSource.close();
+                if (evtSource && evtSource.readyState !== EventSource.CONNECTING) {
+                    console.log('[SSE] Closing failed EventSource');
+                    try {
+                        evtSource.close();
+                    } catch (e) {
+                        console.error('[SSE] Error closing EventSource:', e);
+                    }
                 }
 
-                // Calculate exponential backoff delay
-                const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), maxReconnectDelay);
-                reconnectAttempts++;
-
-                console.log(`Scheduling reconnection in ${delay}ms (attempt ${reconnectAttempts})...`);
-
-                // Start countdown
-                let remainingSeconds = Math.ceil(delay / 1000);
-                showConnectionStatus(`Connection lost. Reconnecting in ${remainingSeconds}s...`);
-
-                countdownInterval = setInterval(() => {
-                    remainingSeconds--;
-                    if (remainingSeconds > 0) {
-                        showConnectionStatus(`Connection lost. Reconnecting in ${remainingSeconds}s...`);
-                    } else {
-                        showConnectionStatus(`Connection lost. Reconnecting now...`);
-                    }
-                }, 1000);
-
-                reconnectTimeout = setTimeout(() => {
-                    if (countdownInterval) {
-                        clearInterval(countdownInterval);
-                        countdownInterval = null;
-                    }
-                    console.log('Attempting reconnection now...');
-                    connectSSE();
-                }, delay);
+                // Schedule reconnection
+                scheduleReconnect();
             };
 
             // Register all event listeners
             registerSSEListeners(evtSource);
+            console.log('[SSE] Event listeners registered');
 
         } catch (err) {
-            console.error('Failed to create EventSource:', err);
-            // Schedule retry even if constructor throws
-            const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), maxReconnectDelay);
-            reconnectAttempts++;
-            reconnectTimeout = setTimeout(() => {
-                connectSSE();
-            }, delay);
+            console.error('[SSE] Exception creating EventSource:', err);
+            scheduleReconnect();
         }
     }
 
-    function showConnectionStatus(message) {
-        let statusDiv = document.getElementById('connection-status');
-        if (!statusDiv) {
-            statusDiv = document.createElement('div');
-            statusDiv.id = 'connection-status';
-            statusDiv.style.cssText = `
-                position: fixed;
-                top: 10px;
-                right: 10px;
-                background: hsl(var(--destructive));
-                color: white;
-                padding: 8px 16px;
-                border-radius: 6px;
-                font-size: 14px;
-                z-index: 10000;
-                box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+    function scheduleReconnect() {
+        // Only schedule if not already scheduled
+        if (reconnectTimeout) {
+            console.log('[SSE] scheduleReconnect: Already scheduled, skipping');
+            return;
+        }
+
+        // Mark that we're reconnecting
+        isReconnecting = true;
+        reconnectAttempts++;
+
+        // Always use fixed 5 second delay
+        const delay = reconnectDelay;
+
+        console.log(`[SSE] Scheduling reconnection in ${delay}ms (attempt ${reconnectAttempts})`);
+
+        // Show reconnection message in chat
+        let remainingSeconds = Math.ceil(delay / 1000);
+        showReconnectionMessage(remainingSeconds);
+
+        // Update countdown every second
+        countdownInterval = setInterval(() => {
+            remainingSeconds--;
+            console.log(`[SSE] Countdown: ${remainingSeconds}s remaining`);
+            if (remainingSeconds > 0) {
+                updateReconnectionCountdown(remainingSeconds);
+            } else {
+                showReconnectionAttempting();
+            }
+        }, 1000);
+
+        // Actually reconnect after delay
+        reconnectTimeout = setTimeout(() => {
+            console.log('[SSE] Timeout expired, calling connectSSE()');
+            if (countdownInterval) {
+                clearInterval(countdownInterval);
+                countdownInterval = null;
+            }
+            connectSSE();
+        }, delay);
+    }
+
+    function showReconnectionMessage(seconds) {
+        // Remove any existing reconnection message
+        if (reconnectionMessageDiv) {
+            reconnectionMessageDiv.remove();
+        }
+
+        // Create system message in chat with danger styling
+        reconnectionMessageDiv = document.createElement('div');
+        reconnectionMessageDiv.className = 'message system reconnection-danger';
+        reconnectionMessageDiv.id = 'reconnection-status';
+        reconnectionMessageDiv.style.cssText = `
+            background: hsl(var(--destructive) / 0.1);
+            border-left: 4px solid hsl(var(--destructive));
+            padding-left: 12px;
+            margin: 8px 0;
+        `;
+
+        const avatar = document.createElement('div');
+        avatar.className = 'message-avatar';
+        avatar.style.color = 'hsl(var(--destructive))';
+        avatar.innerHTML = '<i data-lucide="wifi-off" style="width: 18px; height: 18px;"></i>';
+
+        const messageContent = document.createElement('div');
+        messageContent.className = 'message-content';
+        messageContent.style.cssText = 'color: hsl(var(--destructive)); font-weight: 500;';
+        messageContent.innerHTML = `
+            <div class="reconnection-message">
+                <span>Connection lost. Reconnecting in </span>
+                <span class="reconnection-countdown">
+                    <span class="countdown-digit">${seconds}</span>
+                </span>
+                <span>s...</span>
+            </div>
+        `;
+
+        reconnectionMessageDiv.appendChild(avatar);
+        reconnectionMessageDiv.appendChild(messageContent);
+
+        chatHistory.appendChild(reconnectionMessageDiv);
+        chatHistory.scrollTop = chatHistory.scrollHeight;
+        refreshIcons();
+    }
+
+    function updateReconnectionCountdown(seconds) {
+        if (!reconnectionMessageDiv) return;
+
+        const countdownSpan = reconnectionMessageDiv.querySelector('.countdown-digit');
+        if (countdownSpan) {
+            // Trigger flip animation by replacing content
+            countdownSpan.style.animation = 'none';
+            setTimeout(() => {
+                countdownSpan.textContent = seconds;
+                countdownSpan.style.animation = '';
+            }, 10);
+        }
+    }
+
+    function showReconnectionAttempting() {
+        if (!reconnectionMessageDiv) return;
+
+        // Change to neutral styling
+        reconnectionMessageDiv.className = 'message system reconnection-attempting';
+        reconnectionMessageDiv.style.cssText = `
+            background: hsl(var(--muted) / 0.3);
+            border-left: 4px solid hsl(var(--muted-foreground));
+            padding-left: 12px;
+            margin: 8px 0;
+        `;
+
+        const avatar = reconnectionMessageDiv.querySelector('.message-avatar');
+        if (avatar) {
+            avatar.style.color = 'hsl(var(--muted-foreground))';
+            avatar.innerHTML = '<i data-lucide="loader-2" style="width: 18px; height: 18px; animation: spin 1s linear infinite;"></i>';
+        }
+
+        const messageContent = reconnectionMessageDiv.querySelector('.message-content');
+        if (messageContent) {
+            messageContent.style.cssText = 'color: hsl(var(--muted-foreground)); font-weight: 500;';
+            messageContent.innerHTML = `
+                <div class="reconnection-message">
+                    <span>Reconnecting now...</span>
+                </div>
             `;
-            document.body.appendChild(statusDiv);
         }
-        statusDiv.textContent = message;
-        statusDiv.style.display = 'block';
+        refreshIcons();
     }
 
-    function hideConnectionStatus() {
-        const statusDiv = document.getElementById('connection-status');
-        if (statusDiv) {
-            statusDiv.style.display = 'none';
+    function hideReconnectionMessage() {
+        if (reconnectionMessageDiv) {
+            // Show success message instead of just removing
+            showReconnectionSuccess();
         }
+    }
+
+    function showReconnectionSuccess() {
+        if (!reconnectionMessageDiv) return;
+
+        // Change to success styling
+        reconnectionMessageDiv.className = 'message system reconnection-success';
+        reconnectionMessageDiv.style.cssText = `
+            background: hsl(142 76% 36% / 0.1);
+            border-left: 4px solid hsl(142 76% 36%);
+            padding-left: 12px;
+            margin: 8px 0;
+        `;
+
+        const avatar = reconnectionMessageDiv.querySelector('.message-avatar');
+        if (avatar) {
+            avatar.style.color = 'hsl(142 76% 36%)';
+            avatar.innerHTML = '<i data-lucide="wifi" style="width: 18px; height: 18px;"></i>';
+        }
+
+        const messageContent = reconnectionMessageDiv.querySelector('.message-content');
+        if (messageContent) {
+            messageContent.style.cssText = 'color: hsl(142 76% 36%); font-weight: 500;';
+            messageContent.innerHTML = `
+                <div class="reconnection-message">
+                    <span>✓ Reconnected successfully</span>
+                </div>
+            `;
+        }
+        refreshIcons();
+
+        // Remove the success message after 3 seconds
+        setTimeout(() => {
+            if (reconnectionMessageDiv) {
+                reconnectionMessageDiv.remove();
+                reconnectionMessageDiv = null;
+            }
+        }, 3000);
     }
 
     function registerSSEListeners(source) {
@@ -3073,15 +3880,20 @@ document.addEventListener('DOMContentLoaded', () => {
     const savedSlide = AppState.slide;
 
     if (savedPresentation) {
-        console.log('Restoring session from localStorage:', savedPresentation);
-        loadPresentation(savedPresentation);
+        console.log('[SESSION] Restoring session from localStorage:', savedPresentation, 'slide:', savedSlide);
+        loadPresentation(savedPresentation, true); // preserveSlide = true
 
-        // Navigate to saved slide after load completes
-        setTimeout(() => {
-            if (savedSlide > 1) {
+        // Navigate to saved slide after iframe loads (event-driven, not timeout)
+        const previewFrame = document.getElementById('preview-frame');
+        if (previewFrame && savedSlide > 1) {
+            const slideNavigationHandler = () => {
+                console.log('[SESSION] Preview iframe loaded, navigating to slide:', savedSlide);
                 reloadPreview(savedSlide);
-            }
-        }, 1000);
+                // Clean up listener to prevent duplicate calls
+                previewFrame.removeEventListener('load', slideNavigationHandler);
+            };
+            previewFrame.addEventListener('load', slideNavigationHandler);
+        }
 
         // Ensure welcome screen is hidden
         hideWelcomeScreen();

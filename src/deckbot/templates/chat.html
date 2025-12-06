@@ -83,8 +83,8 @@
                         <span class="kbd">^3</span>
                     </button>
                     <button id="menu-view-style" class="dropdown-item checkable">
-                        <i data-lucide="palette" style="width: 16px; height: 16px;"></i>
-                        Style
+                        <i data-lucide="settings" style="width: 16px; height: 16px;"></i>
+                        Settings
                         <span class="kbd">^4</span>
                     </button>
                 </div>
@@ -104,9 +104,9 @@
                     <i data-lucide="layout-template"></i>
                     <span class="btn-label">Layouts</span>
                 </button>
-                <button id="toggle-btn-style" class="view-toggle-btn" title="Style">
-                    <i data-lucide="palette"></i>
-                    <span class="btn-label">Style</span>
+                <button id="toggle-btn-style" class="view-toggle-btn" title="Settings">
+                    <i data-lucide="settings"></i>
+                    <span class="btn-label">Settings</span>
                 </button>
             </div>
             <div class="theme-selector">
@@ -165,6 +165,7 @@
                 <form id="create-form">
                     <input type="text" id="new-pres-name" placeholder="Presentation name" required>
                     <input type="text" id="new-pres-desc" placeholder="Description (optional)">
+                    <input type="hidden" id="new-pres-template-value" value="">
                     <select id="new-pres-template" style="margin-bottom: 15px;">
                         <option value="">No template</option>
                     </select>
@@ -346,36 +347,152 @@
 
             <!-- Style View -->
             <div id="view-style" class="sidebar-view">
-                <div class="style-container" style="padding: 20px; overflow-y: auto; height: 100%;">
-                    <h3>Style Specification</h3>
-                    <p class="style-hint">Define your presentation's visual style and instructions</p>
+                <div class="style-container" style="padding: 0; overflow-y: auto; height: 100%; display: flex; flex-direction: column;">
+                    <h3 style="padding: 20px 20px 0 20px; margin: 0;">Style & Settings</h3>
+                    <p class="style-hint" style="padding: 8px 20px 16px 20px; margin: 0; font-size: 0.9em; opacity: 0.7;">Manage presentation settings and view agent prompts</p>
                     
-                    <div class="form-group" style="margin-bottom: 20px;">
-                        <label style="display: block; margin-bottom: 8px; font-weight: bold;">Coding Agent Instructions</label>
-                        <p style="font-size: 0.8em; opacity: 0.7; margin-bottom: 8px;">Instructions for the agent on tone, structure, and content.</p>
-                        <textarea id="style-instructions" style="width: 100%; min-height: 100px; padding: 10px; resize: vertical;" placeholder="E.g. Use professional tone, start with an agenda..."></textarea>
+                    <!-- Tabs -->
+                    <div class="style-tabs" style="display: flex; border-bottom: 1px solid hsl(var(--border)); padding: 0 20px; flex-wrap: wrap;">
+                        <button class="style-tab active" data-tab="presentation">Presentation</button>
+                        <button class="style-tab" data-tab="style">Style</button>
+                        <button class="style-tab" data-tab="presentation-agent">Presentation Agent</button>
+                        <button class="style-tab" data-tab="image-agent">Image Agent</button>
                     </div>
                     
-                    <div class="form-group" style="margin-bottom: 20px;">
-                        <label style="display: block; margin-bottom: 8px; font-weight: bold;">Image Style Prompt</label>
-                        <p style="font-size: 0.8em; opacity: 0.7; margin-bottom: 8px;">Instructions for the image generation model.</p>
-                        <textarea id="style-image-prompt" style="width: 100%; min-height: 100px; padding: 10px; resize: vertical;" placeholder="E.g. Minimalist, blue and white color scheme..."></textarea>
-                    </div>
-                    
-                    <div class="form-group" style="margin-bottom: 20px;">
-                        <label style="display: block; margin-bottom: 8px; font-weight: bold;">Style Reference Image</label>
-                        <p style="font-size: 0.8em; opacity: 0.7; margin-bottom: 8px;">Upload an image to serve as a visual style reference.</p>
-                        
-                        <div id="style-ref-image-preview" style="margin-bottom: 10px; max-width: 100%; display: none;">
-                            <img id="style-ref-img" src="" style="max-width: 100%; border-radius: 4px; border: 1px solid hsl(var(--border));">
-                            <button id="btn-remove-ref-image" class="btn btn-secondary btn-sm" style="margin-top: 5px;">Remove Reference</button>
+                    <!-- Presentation Tab -->
+                    <div id="style-tab-presentation" class="style-tab-content active" style="padding: 20px; overflow-y: auto; flex: 1;">
+                        <div class="form-group" style="margin-bottom: 20px;">
+                            <label style="display: block; margin-bottom: 8px; font-weight: bold;">Title</label>
+                            <input type="text" id="style-pres-title" style="width: 100%; padding: 10px; margin-bottom: 8px;" placeholder="Presentation title">
                         </div>
                         
-                        <input type="file" id="style-ref-upload" accept="image/*">
+                        <div class="form-group" style="margin-bottom: 20px;">
+                            <label style="display: block; margin-bottom: 8px; font-weight: bold;">Description</label>
+                            <textarea id="style-pres-description" style="width: 100%; min-height: 80px; padding: 10px; resize: vertical;" placeholder="Description (optional)"></textarea>
+                        </div>
+                        
+                        <div class="form-group" style="margin-bottom: 20px;">
+                            <label style="display: block; margin-bottom: 8px; font-weight: bold;">Aspect Ratio</label>
+                            <select id="style-pres-aspect-ratio" style="width: 100%; padding: 10px;">
+                                <option value="16:9">16:9 (Widescreen)</option>
+                                <option value="4:3">4:3 (Standard)</option>
+                                <option value="16:10">16:10</option>
+                                <option value="3:2">3:2</option>
+                                <option value="1:1">1:1 (Square)</option>
+                            </select>
+                        </div>
+                        
+                        <div class="form-buttons">
+                            <button id="btn-save-presentation-settings" class="btn btn-primary">Save Changes</button>
+                        </div>
                     </div>
                     
-                    <div class="form-buttons">
-                        <button id="btn-save-style" class="btn btn-primary">Save Changes</button>
+                    <!-- Style Tab -->
+                    <div id="style-tab-style" class="style-tab-content" style="padding: 20px; overflow-y: auto; flex: 1; display: none;">
+                        <div class="form-group" style="margin-bottom: 20px;">
+                            <label style="display: block; margin-bottom: 8px; font-weight: bold;">Typography</label>
+                            <p style="font-size: 0.8em; opacity: 0.7; margin-bottom: 12px;">Select fonts for headings and body text.</p>
+                            
+                            <div style="margin-bottom: 12px;">
+                                <label style="display: block; margin-bottom: 4px; font-size: 0.85em; font-weight: 500;">Primary Font (Headings)</label>
+                                <div style="position: relative;">
+                                    <input type="text" id="style-font-primary" list="google-fonts-list" style="width: 100%; padding: 10px;" placeholder="Start typing to search fonts...">
+                                    <div id="font-primary-preview" style="margin-top: 8px; padding: 12px; border: 1px solid hsl(var(--border)); border-radius: 4px; min-height: 50px; display: none;">
+                                        <p style="margin: 0; font-size: 24px;">The quick brown fox jumps</p>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div>
+                                <label style="display: block; margin-bottom: 4px; font-size: 0.85em; font-weight: 500;">Secondary Font (Body)</label>
+                                <div style="position: relative;">
+                                    <input type="text" id="style-font-secondary" list="google-fonts-list" style="width: 100%; padding: 10px;" placeholder="Start typing to search fonts...">
+                                    <div id="font-secondary-preview" style="margin-top: 8px; padding: 12px; border: 1px solid hsl(var(--border)); border-radius: 4px; min-height: 50px; display: none;">
+                                        <p style="margin: 0; font-size: 16px;">The quick brown fox jumps over the lazy dog. 1234567890</p>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <datalist id="google-fonts-list"></datalist>
+                        </div>
+                        
+                        <div class="form-group" style="margin-bottom: 20px;">
+                            <label style="display: block; margin-bottom: 12px; font-weight: bold;">Color Palette</label>
+                            <p style="font-size: 0.8em; opacity: 0.7; margin-bottom: 12px;">These colors define the visual style for this presentation and will be used by both the presentation and image agents.</p>
+                            
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
+                                <div>
+                                    <label style="display: block; margin-bottom: 4px; font-size: 0.85em; font-weight: 500;">Primary</label>
+                                    <input type="color" id="style-color-primary" style="width: 100%; height: 40px; border: 1px solid hsl(var(--border)); border-radius: 4px; cursor: pointer;">
+                                </div>
+                                <div>
+                                    <label style="display: block; margin-bottom: 4px; font-size: 0.85em; font-weight: 500;">Secondary</label>
+                                    <input type="color" id="style-color-secondary" style="width: 100%; height: 40px; border: 1px solid hsl(var(--border)); border-radius: 4px; cursor: pointer;">
+                                </div>
+                                <div>
+                                    <label style="display: block; margin-bottom: 4px; font-size: 0.85em; font-weight: 500;">Accent</label>
+                                    <input type="color" id="style-color-accent" style="width: 100%; height: 40px; border: 1px solid hsl(var(--border)); border-radius: 4px; cursor: pointer;">
+                                </div>
+                                <div>
+                                    <label style="display: block; margin-bottom: 4px; font-size: 0.85em; font-weight: 500;">Danger</label>
+                                    <input type="color" id="style-color-danger" style="width: 100%; height: 40px; border: 1px solid hsl(var(--border)); border-radius: 4px; cursor: pointer;">
+                                </div>
+                                <div>
+                                    <label style="display: block; margin-bottom: 4px; font-size: 0.85em; font-weight: 500;">Muted</label>
+                                    <input type="color" id="style-color-muted" style="width: 100%; height: 40px; border: 1px solid hsl(var(--border)); border-radius: 4px; cursor: pointer;">
+                                </div>
+                                <div>
+                                    <label style="display: block; margin-bottom: 4px; font-size: 0.85em; font-weight: 500;">Foreground (Text)</label>
+                                    <input type="color" id="style-color-foreground" style="width: 100%; height: 40px; border: 1px solid hsl(var(--border)); border-radius: 4px; cursor: pointer;">
+                                </div>
+                            </div>
+                            <div>
+                                <label style="display: block; margin-bottom: 4px; font-size: 0.85em; font-weight: 500;">Background</label>
+                                <input type="color" id="style-color-background" style="width: 100%; height: 40px; border: 1px solid hsl(var(--border)); border-radius: 4px; cursor: pointer;">
+                            </div>
+                        </div>
+                        
+                        <div class="form-group" style="margin-bottom: 20px;">
+                            <label style="display: block; margin-bottom: 8px; font-weight: bold;">Coding Agent Instructions</label>
+                            <p style="font-size: 0.8em; opacity: 0.7; margin-bottom: 8px;">Instructions for the agent on tone, structure, and content.</p>
+                            <textarea id="style-instructions" style="width: 100%; min-height: 100px; padding: 10px; resize: vertical;" placeholder="E.g. Use professional tone, start with an agenda..."></textarea>
+                        </div>
+                        
+                        <div class="form-group" style="margin-bottom: 20px;">
+                            <label style="display: block; margin-bottom: 8px; font-weight: bold;">Image Style Prompt</label>
+                            <p style="font-size: 0.8em; opacity: 0.7; margin-bottom: 8px;">Instructions for the image generation model.</p>
+                            <textarea id="style-image-prompt" style="width: 100%; min-height: 100px; padding: 10px; resize: vertical;" placeholder="E.g. Minimalist, blue and white color scheme..."></textarea>
+                        </div>
+                        
+                        <div class="form-group" style="margin-bottom: 20px;">
+                            <label style="display: block; margin-bottom: 8px; font-weight: bold;">Style Reference Image</label>
+                            <p style="font-size: 0.8em; opacity: 0.7; margin-bottom: 8px;">Upload an image to serve as a visual style reference.</p>
+                            
+                            <div id="style-ref-image-preview" style="margin-bottom: 10px; max-width: 100%; display: none;">
+                                <img id="style-ref-img" src="" style="max-width: 100%; border-radius: 4px; border: 1px solid hsl(var(--border));">
+                                <button id="btn-remove-ref-image" class="btn btn-secondary btn-sm" style="margin-top: 5px;">Remove Reference</button>
+                            </div>
+                            
+                            <input type="file" id="style-ref-upload" accept="image/*">
+                        </div>
+                        
+                        <div class="form-buttons">
+                            <button id="btn-save-style" class="btn btn-primary">Save Changes</button>
+                        </div>
+                    </div>
+                    
+                    <!-- Presentation Agent Tab -->
+                    <div id="style-tab-presentation-agent" class="style-tab-content" style="padding: 20px; overflow-y: auto; flex: 1; display: none;">
+                        <div id="presentation-agent-prompts">
+                            <p style="opacity: 0.7; font-size: 0.9em;">Loading prompts...</p>
+                        </div>
+                    </div>
+                    
+                    <!-- Image Agent Tab -->
+                    <div id="style-tab-image-agent" class="style-tab-content" style="padding: 20px; overflow-y: auto; flex: 1; display: none;">
+                        <div id="image-agent-prompts">
+                            <p style="opacity: 0.7; font-size: 0.9em;">Loading prompts...</p>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -408,7 +525,7 @@
             </div>
         </div>
     </div>
-    <script src="/static/app.js"></script>
+    <script src="/static/app.js?v={{ cache_bust }}"></script>
     <script>
         // Initialize Lucide icons
         lucide.createIcons();

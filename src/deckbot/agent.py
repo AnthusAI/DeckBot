@@ -10,22 +10,36 @@ from deckbot.preferences import PreferencesManager
 class Agent:
     def __init__(self, presentation_context, root_dir=None):
         self.context = presentation_context
-        self.api_key = os.getenv("GOOGLE_API_KEY")
-        
+
         # Initialize preferences
         self.prefs = PreferencesManager()
-        
-        # Check for deprecated GEMINI_API_KEY and warn user
 
-        if not self.api_key and os.getenv("GEMINI_API_KEY"):
-            print("Warning: GEMINI_API_KEY is set but deprecated. Please use GOOGLE_API_KEY instead.")
-            print("  export GOOGLE_API_KEY=$GEMINI_API_KEY")
-            # For now, fall back to GEMINI_API_KEY for backwards compatibility
-            self.api_key = os.getenv("GEMINI_API_KEY")
+        # Initialize secrets manager and try migration
+        from deckbot.secrets import SecretsManager
+        secrets = SecretsManager()
+        secrets.migrate_from_env()
+
+        # Get API key from active profile
+        active_profile = secrets.get_active_profile(include_secrets=True)
+        if active_profile:
+            self.api_key = active_profile.get('api_key')
+            self.profile_model_config = active_profile.get('model_config', {})
+        else:
+            # Fallback to .env (backwards compatibility)
+            self.api_key = os.getenv("GOOGLE_API_KEY")
+            self.profile_model_config = {}
+
+            # Check for deprecated GEMINI_API_KEY and warn user
+            if not self.api_key and os.getenv("GEMINI_API_KEY"):
+                print("Warning: GEMINI_API_KEY is set but deprecated. Please use GOOGLE_API_KEY instead.")
+                print("  export GOOGLE_API_KEY=$GEMINI_API_KEY")
+                # For now, fall back to GEMINI_API_KEY for backwards compatibility
+                self.api_key = os.getenv("GEMINI_API_KEY")
         
         # Initialize tools
-        # Pass root_dir to NanoBananaClient
-        self.nano_client = NanoBananaClient(presentation_context, root_dir=root_dir)
+        # Pass root_dir and image_model to NanoBananaClient
+        image_model = self.profile_model_config.get('image_model') if hasattr(self, 'profile_model_config') else None
+        self.nano_client = NanoBananaClient(presentation_context, root_dir=root_dir, image_model=image_model)
         self.tools_handler = PresentationTools(presentation_context, self.nano_client, root_dir=root_dir, api_key=self.api_key)
         
         # Wrap tools for visibility and patch handler
@@ -90,10 +104,16 @@ class Agent:
 
         if self.api_key:
             self.client = genai.Client(api_key=self.api_key)
-            
-            # Load models from preferences
-            primary_model = self.prefs.get('primary_model', 'gemini-3-pro-preview')
-            secondary_model = self.prefs.get('secondary_model', 'gemini-2.0-flash-exp')
+
+            # Load models from profile first, then preferences as fallback
+            primary_model = (
+                self.profile_model_config.get('primary_model') or
+                self.prefs.get('primary_model', 'gemini-3-pro-preview')
+            )
+            secondary_model = (
+                self.profile_model_config.get('secondary_model') or
+                self.prefs.get('secondary_model', 'gemini-2.0-flash-exp')
+            )
             self.secondary_model_name = secondary_model
 
             # Log model configuration
@@ -147,6 +167,32 @@ class Agent:
                     if "instructions" in data and data["instructions"]:
                         template_instructions = f"\n## Branding & Template Instructions\n{data['instructions']}\n"
                     
+                    # Build color and font settings section if defined
+                    color_settings_section = ""
+                    if "color_settings" in data and data["color_settings"]:
+                        colors = data["color_settings"]
+                        color_settings_section = "\n## Presentation Style Settings\n"
+                        color_settings_section += "These are the official style reference settings for this presentation. Use them consistently throughout:\n\n"
+                        color_settings_section += "### Color Palette\n"
+                        color_settings_section += f"- **Primary**: {colors.get('primary', 'N/A')}\n"
+                        color_settings_section += f"- **Secondary**: {colors.get('secondary', 'N/A')}\n"
+                        color_settings_section += f"- **Accent**: {colors.get('accent', 'N/A')}\n"
+                        color_settings_section += f"- **Danger**: {colors.get('danger', 'N/A')}\n"
+                        color_settings_section += f"- **Muted**: {colors.get('muted', 'N/A')}\n"
+                        color_settings_section += f"- **Foreground (Text)**: {colors.get('foreground', 'N/A')}\n"
+                        color_settings_section += f"- **Background**: {colors.get('background', 'N/A')}\n\n"
+                        color_settings_section += "When creating slides, use these colors for text, backgrounds, accents, and visual elements. These colors define the visual identity of this presentation.\n\n"
+                    
+                    # Add font settings if defined
+                    if "font_settings" in data and data["font_settings"]:
+                        fonts = data["font_settings"]
+                        if not color_settings_section:
+                            color_settings_section = "\n## Presentation Style Settings\n"
+                        color_settings_section += "### Typography\n"
+                        color_settings_section += f"- **Primary Font (Headings)**: {fonts.get('primary', 'N/A')}\n"
+                        color_settings_section += f"- **Secondary Font (Body)**: {fonts.get('secondary', 'N/A')}\n\n"
+                        color_settings_section += "Use these fonts consistently for headings and body text throughout the presentation.\n"
+                    
                     # Build design opinions section if defined
                     if "design_opinions" in data and data["design_opinions"]:
                         opinions = data["design_opinions"]
@@ -166,7 +212,7 @@ class Agent:
                             elif opinions["icons"] == "none":
                                 design_opinions_section += "1. **Icons**: Avoid using icons or emojis unless specifically requested.\n"
                         
-                        # Handle color palette
+                        # Handle color palette (legacy - now we use color_settings)
                         if "color_palette" in opinions and opinions["color_palette"]:
                             if isinstance(opinions["color_palette"], list):
                                 colors = ", ".join(opinions["color_palette"])
@@ -245,6 +291,10 @@ class Agent:
 1. **Clean Layouts**: Use ample whitespace.
 2. **Visuals**: Prefer high-quality images (generated or provided) over cluttered text.
 """
+        
+        # Ensure color_settings_section is defined even if not in metadata
+        if "color_settings_section" not in locals():
+            color_settings_section = ""
 
         # Build current slide context
         slide_context = ""
@@ -273,6 +323,7 @@ You do NOT need to call 'read_file' for these files.
 3. Create visuals using 'generate_image'.
 4. Always keep the "Vibe" in mind: Professional but enthusiastic, clean, and modern.
 
+{color_settings_section}
 {final_design_section}
 {layouts_section}
 
@@ -542,11 +593,15 @@ When the user asks for an image:
             raise e
 
     def chat(self, user_input, status_spinner=None, cancelled_flag=None, current_slide=None):
+        print(f"[AGENT] chat() called with input: {user_input[:100]}... (slide={current_slide})")
+
         if not self.model or not self.client:
+            print("[AGENT] ERROR: No model or client initialized")
             return "Error: API key not found or model initialization failed."
 
         # Check for cancellation at start
         if cancelled_flag and cancelled_flag.is_cancelled():
+            print("[AGENT] Request cancelled at start")
             return "Request cancelled by user."
 
         # Update tools with spinner if provided
@@ -557,8 +612,10 @@ When the user asks for an image:
         self.tools_handler.waiting_for_user_input = False
 
         # Refresh system prompt to include latest file context and current slide
+        print("[AGENT] Building system prompt...")
         new_system_prompt = self._build_system_prompt(current_slide=current_slide)
         self.system_prompt = new_system_prompt
+        print(f"[AGENT] System prompt built ({len(new_system_prompt)} chars)")
         
         try:
             # Note: User message may already be logged by /api/chat endpoint
@@ -623,23 +680,28 @@ When the user asks for an image:
             
             # Check for cancellation before API call
             if cancelled_flag and cancelled_flag.is_cancelled():
+                print("[AGENT] Cancelled before API call")
                 return "Request cancelled by user."
-            
+
             # Make the API call with automatic function calling
+            print(f"[AGENT] Making API call to {self.model_name} with {len(contents)} content items...")
             try:
                 response = self._generate_with_fallback(contents)
-                
+                print("[AGENT] API call completed successfully")
+
                 # Check for cancellation after API call
                 if cancelled_flag and cancelled_flag.is_cancelled():
+                    print("[AGENT] Cancelled after API call")
                     return "Request cancelled by user."
             except KeyError as ke:
-
                 # If automatic function calling fails to find a tool
+                print(f"[AGENT] Tool KeyError: {ke}")
                 import traceback
                 traceback.print_exc()
                 return f"Error: Tool not found or failed to execute: {repr(ke)}. Available tools: {[t.__name__ if hasattr(t, '__name__') else str(t) for t in self.tools_list[:5]]}"
-            
+
             # Extract text from response
+            print("[AGENT] Extracting text from response...")
             text_response = ""
             if response.candidates and len(response.candidates) > 0:
                 candidate = response.candidates[0]

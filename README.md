@@ -94,22 +94,40 @@ If DeckBot isn't what you're looking for, there is a crowded market of alternati
     *   **Chrome/Chromium**: Required for PDF export.
 
 3.  **Configuration:**
-    Create a `.env` file in the project root with your Google AI API key:
+
+    **Option A: UI Configuration (Recommended)**
+
+    1. Start DeckBot: `deckbot --web`
+    2. Open your browser and click the gear icon (Preferences)
+    3. Go to the "API Keys" tab
+    4. Click "Add Profile" and enter:
+       - Profile name (e.g., "My Gemini")
+       - Google API key from [Google AI Studio](https://aistudio.google.com/apikey)
+       - Model settings (primary, secondary, and image models)
+
+    Your configuration is stored in `.deckbot.secrets.yaml` (automatically gitignored).
+
+    **Option B: .env File (Legacy)**
+
+    You can also create a `.env` file with your API key:
     ```bash
     GOOGLE_API_KEY=your_api_key_here
     ```
-    Get your API key from [Google AI Studio](https://aistudio.google.com/apikey).
 
-4.  **Model Configuration (Optional):**
-    You can configure which Gemini models to use by creating a `.deckbot.yaml` file in the project root. This is useful if you want to save costs by using a cheaper model (like Flash) as your primary driver, or if you want to experiment with new experimental models.
+    On first run, DeckBot will automatically migrate this to a profile in the UI.
 
-    ```yaml
-    # .deckbot.yaml
-    primary_model: gemini-3-pro-preview  # Default
-    secondary_model: gemini-2.0-flash-exp # Default
-    ```
-    
-    DeckBot will automatically fallback to the secondary model if the primary model hits a rate limit (429 Resource Exhausted).
+4.  **API Key Profiles:**
+    DeckBot uses a profile system to manage API keys and model configurations. Each profile contains:
+    - **Provider**: Google Gemini (OpenAI, Anthropic, Bedrock coming soon)
+    - **API Key**: Your provider API key (stored securely in `.deckbot.secrets.yaml`)
+    - **Model Configuration**:
+      - Primary Model: Main chat/coding assistant (default: `gemini-3-pro-preview`)
+      - Secondary Model: Fallback for rate limits (default: `gemini-2.0-flash-exp`)
+      - Image Model: For image generation (default: `gemini-3-pro-image-preview`)
+
+    You can create multiple profiles (e.g., "Work Account", "Personal") and switch between them in Preferences → API Keys.
+
+    DeckBot automatically falls back to the secondary model if the primary hits rate limits (429 Resource Exhausted).
 
 ## Usage
 
@@ -117,6 +135,9 @@ If DeckBot isn't what you're looking for, there is a crowded market of alternati
 Run the CLI to launch the web interface:
 ```bash
 deckbot
+
+# Or specify a custom port:
+deckbot --port 8080
 ```
 Open `http://localhost:5555` to create decks, chat with the agent, and see live updates.
 

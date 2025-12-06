@@ -11,6 +11,19 @@
     "background": "#FFFFFF",
     "accents": ["#2F80ED", "#EB5757"]
   },
+  "color_settings": {
+    "primary": "#3B82F6",
+    "secondary": "#8B5CF6",
+    "accent": "#60A5FA",
+    "danger": "#EF4444",
+    "muted": "#9CA3AF",
+    "foreground": "#2C4074",
+    "background": "#EEE5D3"
+  },
+  "font_settings": {
+    "primary": "Inter",
+    "secondary": "Source Serif Pro"
+  },
   "design_opinions": {
     "icons": "lucide",
     "color_palette": ["#0A0A0A", "#2F80ED", "#EB5757"],

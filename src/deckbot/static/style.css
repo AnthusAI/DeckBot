@@ -1467,6 +1467,183 @@ button.btn-secondary:hover {
 
 .layout-card:hover {
   border-color: hsl(var(--primary));
+}
+
+/* ===== Style View Tabs ===== */
+.style-tabs {
+  display: flex;
+  gap: 0;
+  background: hsl(var(--muted) / 0.3);
+}
+
+.style-tab {
+  flex: 1;
+  padding: 12px 16px;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  color: hsl(var(--muted-foreground));
+  transition: all 0.2s;
+  text-align: center;
+}
+
+.style-tab:hover {
+  color: hsl(var(--foreground));
+  background: hsl(var(--muted) / 0.5);
+}
+
+.style-tab.active {
+  color: hsl(var(--primary));
+  border-bottom-color: hsl(var(--primary));
+  background: hsl(var(--background));
+}
+
+.style-tab-content {
+  display: none;
+}
+
+.style-tab-content.active {
+  display: block;
+}
+
+.prompt-section {
+  margin-bottom: 24px;
+  padding: 16px;
+  background: hsl(var(--muted) / 0.3);
+  border-radius: var(--radius);
+  border: 1px solid hsl(var(--border));
+}
+
+.prompt-section-title {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 8px;
+  color: hsl(var(--foreground));
+}
+
+.prompt-section-desc {
+  font-size: 12px;
+  color: hsl(var(--muted-foreground));
+  margin-bottom: 12px;
+}
+
+.prompt-item {
+  margin-bottom: 16px;
+  padding: 12px;
+  background: hsl(var(--card));
+  border-radius: calc(var(--radius) - 2px);
+  border-left: 3px solid hsl(var(--primary));
+}
+
+.prompt-item-label {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: hsl(var(--muted-foreground));
+  margin-bottom: 6px;
+}
+
+.prompt-item-value {
+  font-size: 13px;
+  color: hsl(var(--foreground));
+  line-height: 1.6;
+  white-space: pre-wrap;
+  font-family: 'JetBrains Mono', 'Courier New', monospace;
+  background: hsl(var(--muted));
+  padding: 10px;
+  border-radius: 4px;
+  margin-top: 4px;
+}
+
+.prompt-item-value.readonly {
+  opacity: 0.8;
+  font-style: italic;
+}
+
+.prompt-item-source {
+  font-size: 11px;
+  color: hsl(var(--muted-foreground));
+  margin-top: 6px;
+  font-style: italic;
+}
+
+.prompt-scenario {
+  margin-bottom: 32px;
+  padding: 20px;
+  background: hsl(var(--card));
+  border-radius: var(--radius);
+  border: 1px solid hsl(var(--border));
+}
+
+.prompt-scenario-title {
+  font-size: 18px;
+  font-weight: 600;
+  margin-bottom: 8px;
+  color: hsl(var(--foreground));
+}
+
+.prompt-scenario-desc {
+  font-size: 13px;
+  color: hsl(var(--muted-foreground));
+  margin-bottom: 16px;
+}
+
+/* Prompt view sub-tabs (Code/Processed) */
+.prompt-view-tabs {
+  display: flex;
+  gap: 4px;
+  background: hsl(var(--muted) / 0.2);
+  padding: 4px;
+  border-radius: var(--radius);
+}
+
+.prompt-view-tab {
+  flex: 1;
+  padding: 8px 12px;
+  background: transparent;
+  border: none;
+  border-radius: calc(var(--radius) - 2px);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  color: hsl(var(--muted-foreground));
+  transition: all 0.15s;
+}
+
+.prompt-view-tab:hover {
+  color: hsl(var(--foreground));
+  background: hsl(var(--muted) / 0.3);
+}
+
+.prompt-view-tab.active {
+  color: hsl(var(--primary-foreground));
+  background: hsl(var(--primary));
+}
+
+.prompt-view-content {
+  margin-top: 16px;
+}
+
+.prompt-view-structure,
+.prompt-view-code,
+.prompt-view-processed {
+  display: block;
+}
+
+.prompt-view-structure.active,
+.prompt-view-code.active {
+  display: block;
+}
+
+.btn-sm {
+  padding: 4px 8px;
+  font-size: 12px;
+  margin-top: 8px;
+}
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
@@ -2190,4 +2367,57 @@ button.btn-secondary:hover {
 
 .file-tree::-webkit-scrollbar-thumb:hover {
   background: hsl(var(--muted-foreground) / 0.3);
+}
+
+/* ===== Reconnection Status in Chat ===== */
+.reconnection-message {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.25rem;
+  font-family: inherit;
+}
+
+.reconnection-countdown {
+  display: inline-flex;
+  align-items: center;
+  position: relative;
+  height: 1.2em;
+  width: 2ch;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.countdown-digit {
+  display: inline-block;
+  position: relative;
+  animation: flip-in 0.4s cubic-bezier(0.4, 0.0, 0.2, 1);
+}
+
+@keyframes flip-in {
+  from {
+    transform: perspective(400px) rotate3d(1, 0, 0, 90deg);
+    opacity: 0;
+  }
+  to {
+    transform: perspective(400px) rotate3d(1, 0, 0, 0deg);
+    opacity: 1;
+  }
+}
+
+.reconnection-spinner {
+  display: inline-block;
+  width: 0.8em;
+  height: 0.8em;
+  border: 2px solid hsl(var(--muted-foreground) / 0.3);
+  border-top-color: hsl(var(--primary));
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+  margin: 0 0.25rem;
+  vertical-align: middle;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }

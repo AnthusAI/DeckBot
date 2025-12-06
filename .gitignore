@@ -45,9 +45,16 @@ presentations/*
 .deckbot.yaml
 .deckbot_state.yaml
 
+# Secrets file (NEVER commit!)
+.deckbot.secrets.yaml
+
 # Test outputs
 plain.output
 *.output
 
 # Debug/temporary scripts
 debug_*.py
+
+# Backup and temporary files
+*.bak
+*.tmp

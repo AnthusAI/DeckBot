@@ -149,33 +149,43 @@ class SessionService:
 
     def send_message(self, user_input: str, status_spinner=None, current_slide=None) -> str:
         """Send a message to the agent and get the response."""
+        print(f"[SESSION] send_message called with: {user_input[:100]}... (slide={current_slide})")
+
         # Clear cancellation flag at start of new request
         self._cancelled = False
 
         # Emit user message so it appears in chat
+        print("[SESSION] Notifying user message via SSE")
         self._notify("message", {"role": "user", "content": user_input})
+        print("[SESSION] Notifying thinking_start via SSE")
         self._notify("thinking_start")
+
         try:
+            print("[SESSION] Calling agent.chat()...")
             response = self.agent.chat(
                 user_input,
                 status_spinner=status_spinner,
                 cancelled_flag=self,
                 current_slide=current_slide
             )
+            print(f"[SESSION] Agent.chat() returned: {response[:100] if response else 'None'}...")
+            print("[SESSION] Notifying model response via SSE")
             self._notify("message", {"role": "model", "content": response})
             return response
         except Exception as e:
             if self._cancelled:
                 error_msg = "Request cancelled by user."
+                print("[SESSION] Request was cancelled")
                 self._notify("message", {"role": "model", "content": error_msg})
                 return error_msg
             error_msg = f"Error: {str(e)}"
-            print(f"Agent error: {type(e).__name__}: {e}")
+            print(f"[SESSION] Agent error: {type(e).__name__}: {e}")
             import traceback
             traceback.print_exc()
             self._notify("message", {"role": "model", "content": error_msg})
             return error_msg
         finally:
+            print("[SESSION] Notifying thinking_end via SSE")
             self._notify("thinking_end")
     
     def cancel(self):

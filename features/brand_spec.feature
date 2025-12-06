@@ -39,3 +39,4 @@ Feature: Style Specification Management
     When I remove the style reference image
     Then the file "images/style.png" should not exist in the presentation directory
 
+

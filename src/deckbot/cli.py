@@ -98,7 +98,8 @@ def cli(ctx, resume, text, web, port):
     # Default behavior (no --text flag): Launch web UI
     if ctx.invoked_subcommand is None:
         try:
-            from deckbot.webapp import app
+            from deckbot.webapp import app, set_backend_url
+            set_backend_url(port)
             console.print(f"[green]Starting Web UI on http://localhost:{port}[/green]")
             app.run(port=port, debug=True)
         except ImportError:

@@ -4,19 +4,66 @@ import time
 import threading
 import yaml
 from flask import Flask, render_template, request, jsonify, Response, stream_with_context, send_file, send_from_directory
+from flask_cors import CORS
 from deckbot.manager import PresentationManager
 from deckbot.session_service import SessionService
 from deckbot.preferences import PreferencesManager
 
-app = Flask(__name__)
+# Determine if we're in development mode (Vite dev server) or production (serving built files)
+DEVELOPMENT = os.getenv('FLASK_ENV') == 'development'
+
+app = Flask(__name__, static_folder=None if DEVELOPMENT else 'static/dist', static_url_path='')
+CORS(app)  # Enable CORS for development
 
 # Global service instance (single user for now)
 current_service = None
 
+# Backend API URL for frontend to use
+backend_api_url = None
+
+# Path to Vite build output (relative to this file: src/deckbot/static/dist)
+VITE_DIST_PATH = os.path.join(os.path.dirname(__file__), 'static', 'dist')
+
+def set_backend_url(port):
+    """Set the backend API URL based on the port"""
+    global backend_api_url
+    backend_api_url = f'http://localhost:{port}'
+
+@app.route('/api/config')
+def get_config():
+    """Return frontend configuration including API URL"""
+    global backend_api_url
+    return jsonify({
+        'apiUrl': backend_api_url or 'http://localhost:5555'
+    })
+
 @app.route('/')
 def index():
-    import time
-    return render_template('chat.html', cache_bust=int(time.time()))
+    if DEVELOPMENT:
+        # In development, Vite dev server handles the frontend
+        # Return a simple redirect or message
+        api_url = backend_api_url or 'http://localhost:5555'
+        return f'''
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>DeckBot - Development Mode</title>
+        </head>
+        <body>
+            <h1>DeckBot Backend Running</h1>
+            <p>Frontend is served by Vite dev server at <a href="http://localhost:5173">http://localhost:5173</a></p>
+            <p>Backend API is available at <a href="{api_url}/api/presentations">{api_url}/api/presentations</a></p>
+        </body>
+        </html>
+        ''', 200
+    else:
+        # Production: serve index.html from Vite build
+        index_path = os.path.join(VITE_DIST_PATH, 'index.html')
+        if os.path.exists(index_path):
+            with open(index_path, 'r') as f:
+                return f.read()
+        else:
+            return "Vite build not found. Run 'cd frontend && npm run build' first.", 404
 
 @app.route('/api/serve-image')
 def serve_image():
@@ -106,6 +153,11 @@ def create_presentation():
     name = data.get('name')
     description = data.get('description', '')
     template = data.get('template')
+    
+    # Debug logging
+    import logging
+    logging.debug(f"create_presentation called: name={name}, template={template}")
+    print(f"DEBUG: create_presentation - name={name}, template={template}, template type={type(template)}")
     
     if not name:
         return jsonify({"error": "Name is required"}), 400
@@ -302,30 +354,9 @@ def get_template_preview_slides(name):
             needs_regeneration = True
     
     if needs_regeneration:
-        try:
-            # Generate preview images using Marp CLI
-            subprocess.run(
-                [
-                    'npx', '@marp-team/marp-cli',
-                    'deck.marp.md',
-                    '--images', 'png',
-                    '--output', os.path.join('.previews', 'slide.png'),
-                    '--allow-local-files'
-                ],
-                cwd=template_dir,
-                check=True,
-                capture_output=True,
-                timeout=30
-            )
-            
-            # Refresh the list of previews
-            existing_previews = sorted(glob.glob(os.path.join(cache_dir, "slide.*.png")))
-            
-        except subprocess.TimeoutExpired:
-            return jsonify({"error": "Preview generation timed out"}), 500
-        except Exception as e:
-            print(f"Error generating previews for template {name}: {e}")
-            return jsonify({"error": str(e)}), 500
+        # For templates, return empty previews if not cached
+        # Templates are static so we pre-generate their previews
+        return jsonify({"previews": []})
     
     # Return URLs for all preview images
     preview_urls = []
@@ -450,6 +481,174 @@ def set_preference(key):
     prefs.set(key, data['value'])
     return jsonify({"message": "Preference updated", "key": key, "value": data['value']})
 
+# Secrets/Profile Management APIs
+
+@app.route('/api/secrets/profiles', methods=['GET'])
+def list_profiles():
+    """Get all profiles (with masked API keys)."""
+    from deckbot.secrets import SecretsManager
+    secrets = SecretsManager()
+    profiles = secrets.list_profiles()
+
+    # Add masked API keys for display
+    config = secrets._read_config()
+    for profile in profiles:
+        profile_id = profile['id']
+        full_profile = config.get('profiles', {}).get(profile_id, {})
+        api_key = full_profile.get('api_key', '')
+
+        if api_key:
+            # Mask: show first 8 chars and last 4 chars
+            if len(api_key) > 12:
+                profile['api_key_masked'] = f"{api_key[:8]}...{api_key[-4:]}"
+            else:
+                profile['api_key_masked'] = "***"
+
+        # Ensure no full API keys are returned
+        profile.pop('api_key', None)
+
+    return jsonify({'profiles': profiles})
+
+@app.route('/api/secrets/profiles', methods=['POST'])
+def create_profile():
+    """Create a new profile."""
+    from deckbot.secrets import SecretsManager
+    data = request.json
+
+    name = data.get('name')
+    provider = data.get('provider', 'google_gemini')
+    api_key = data.get('api_key')
+    description = data.get('description', '')
+    model_config = data.get('model_config', {})
+
+    if not name or not api_key:
+        return jsonify({'error': 'Name and API key are required'}), 400
+
+    secrets = SecretsManager()
+    try:
+        profile_id = secrets.create_profile(
+            name=name,
+            provider=provider,
+            api_key=api_key,
+            description=description,
+            model_config=model_config
+        )
+        return jsonify({'message': 'Profile created', 'profile_id': profile_id})
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
+
+@app.route('/api/secrets/profiles/<profile_id>', methods=['GET'])
+def get_profile(profile_id):
+    """Get a specific profile (with masked API key)."""
+    from deckbot.secrets import SecretsManager
+    secrets = SecretsManager()
+    profile = secrets.get_profile(profile_id, include_secrets=False)
+
+    if not profile:
+        return jsonify({'error': 'Profile not found'}), 404
+
+    # Return with masked API key for UI
+    full_profile = secrets.get_profile(profile_id, include_secrets=True)
+    if full_profile and full_profile.get('api_key'):
+        # Mask: show first 8 chars and last 4 chars
+        key = full_profile['api_key']
+        if len(key) > 12:
+            profile['api_key_masked'] = f"{key[:8]}...{key[-4:]}"
+        else:
+            profile['api_key_masked'] = "***"
+
+    return jsonify(profile)
+
+@app.route('/api/secrets/profiles/<profile_id>', methods=['PUT'])
+def update_profile(profile_id):
+    """Update a profile."""
+    from deckbot.secrets import SecretsManager
+    data = request.json
+
+    secrets = SecretsManager()
+    success = secrets.update_profile(
+        profile_id=profile_id,
+        name=data.get('name'),
+        description=data.get('description'),
+        api_key=data.get('api_key'),
+        model_config=data.get('model_config')
+    )
+
+    if not success:
+        return jsonify({'error': 'Profile not found'}), 404
+
+    return jsonify({'message': 'Profile updated', 'profile_id': profile_id})
+
+@app.route('/api/secrets/profiles/<profile_id>', methods=['DELETE'])
+def delete_profile(profile_id):
+    """Delete a profile."""
+    from deckbot.secrets import SecretsManager
+    secrets = SecretsManager()
+    success = secrets.delete_profile(profile_id)
+
+    if not success:
+        return jsonify({'error': 'Profile not found'}), 404
+
+    return jsonify({'message': 'Profile deleted', 'profile_id': profile_id})
+
+@app.route('/api/secrets/active-profile', methods=['GET'])
+def get_active_profile():
+    """Get the active profile."""
+    from deckbot.secrets import SecretsManager
+    secrets = SecretsManager()
+    profile = secrets.get_active_profile(include_secrets=False)
+
+    if not profile:
+        return jsonify({'error': 'No active profile'}), 404
+
+    # Mask API key
+    full_profile = secrets.get_active_profile(include_secrets=True)
+    if full_profile and full_profile.get('api_key'):
+        key = full_profile['api_key']
+        if len(key) > 12:
+            profile['api_key_masked'] = f"{key[:8]}...{key[-4:]}"
+        else:
+            profile['api_key_masked'] = "***"
+
+    return jsonify(profile)
+
+@app.route('/api/secrets/active-profile', methods=['POST'])
+def set_active_profile():
+    """Set the active profile."""
+    from deckbot.secrets import SecretsManager
+    data = request.json
+    profile_id = data.get('profile_id')
+
+    if not profile_id:
+        return jsonify({'error': 'Profile ID required'}), 400
+
+    secrets = SecretsManager()
+    success = secrets.set_active_profile(profile_id)
+
+    if not success:
+        return jsonify({'error': 'Profile not found'}), 404
+
+    # IMPORTANT: When switching profiles, we should reinitialize the agent
+    # This ensures the new API key is used immediately
+    global current_service
+    if current_service:
+        # Force agent reinitialization on next chat request
+        current_service = None
+
+    return jsonify({'message': 'Active profile set', 'profile_id': profile_id})
+
+@app.route('/api/secrets/migrate', methods=['POST'])
+def migrate_from_env():
+    """Migrate API key from .env to secrets."""
+    from deckbot.secrets import SecretsManager
+    secrets = SecretsManager()
+    profile_id = secrets.migrate_from_env()
+
+    if profile_id:
+        return jsonify({'message': 'Migration successful', 'profile_id': profile_id})
+    else:
+        return jsonify({'message': 'No migration needed or no API key found'}), 200
+
 @app.route('/api/load', methods=['POST'])
 def load_presentation():
     global current_service
@@ -471,6 +670,7 @@ def load_presentation():
 
 @app.route('/api/chat', methods=['POST'])
 def chat():
+    print("[CHAT] /api/chat endpoint hit")
     global current_service
 
     # Get state parameters from request (new behavior)
@@ -486,11 +686,13 @@ def chat():
         user_input = data.get('message', '')
         presentation_name = data.get('presentation_name')
         current_slide = data.get('current_slide', 1)
+        print(f"[CHAT] JSON request: message='{user_input[:50]}...', pres={presentation_name}, slide={current_slide}")
     else:
         # Form data with images
         user_input = request.form.get('message', '')
         presentation_name = request.form.get('presentation_name')
         current_slide = int(request.form.get('current_slide', 1))
+        print(f"[CHAT] Form request: message='{user_input[:50]}...', pres={presentation_name}, slide={current_slide}")
 
     # Fallback: use global session if no presentation_name provided (backward compatibility)
     if not presentation_name and current_service:
@@ -550,16 +752,27 @@ def chat():
 
     # Use thread to not block
     def run_chat():
-        # Include image references in the message
-        if uploaded_images:
-            image_refs = " ".join([f"[Image: {path}]" for path in uploaded_images])
-            full_message = f"{user_input} {image_refs}".strip()
-            current_service.send_message(full_message, current_slide=current_slide)
-        else:
-            current_service.send_message(user_input, current_slide=current_slide)
+        try:
+            print("[CHAT] Thread started, calling send_message...")
+            # Include image references in the message
+            if uploaded_images:
+                image_refs = " ".join([f"[Image: {path}]" for path in uploaded_images])
+                full_message = f"{user_input} {image_refs}".strip()
+                print(f"[CHAT] Sending with images: {full_message[:100]}")
+                current_service.send_message(full_message, current_slide=current_slide)
+            else:
+                print(f"[CHAT] Sending message: {user_input[:100]}")
+                current_service.send_message(user_input, current_slide=current_slide)
+            print("[CHAT] send_message completed")
+        except Exception as e:
+            print(f"[CHAT] ERROR in thread: {e}")
+            import traceback
+            traceback.print_exc()
 
-    threading.Thread(target=run_chat).start()
-    
+    print("[CHAT] Starting thread...")
+    threading.Thread(target=run_chat, daemon=True).start()
+    print("[CHAT] Thread started, returning response")
+
     return jsonify({"status": "processing"})
 
 @app.route('/api/chat/cancel', methods=['POST'])
@@ -731,14 +944,18 @@ def get_layout_preview(layout_name):
 @app.route('/events')
 def events():
     def stream():
+        # Send initial comment to establish connection
+        yield ": SSE connection established\n\n"
+
         events_queue = []
-        
+
         def listener(event_type, data):
             events_queue.append((event_type, data))
-            
+
         # Track the service we are subscribed to
         last_service = None
-            
+        keepalive_counter = 0
+
         # Keep connection open and yield events
         # We check queue every 0.1s
         while True:
@@ -752,8 +969,15 @@ def events():
             while events_queue:
                 event_type, data = events_queue.pop(0)
                 yield f"event: {event_type}\ndata: {json.dumps(data)}\n\n"
+
+            # Send keepalive comment every 30 seconds to prevent timeout
+            keepalive_counter += 1
+            if keepalive_counter >= 300:  # 300 * 0.1s = 30s
+                yield ": keepalive\n\n"
+                keepalive_counter = 0
+
             time.sleep(0.1)
-            
+
     return Response(stream_with_context(stream()), mimetype='text/event-stream')
 
 @app.route('/api/presentation/settings', methods=['GET'])
@@ -799,6 +1023,19 @@ def get_presentation_settings():
         "title": title,
         "aspect_ratio": pres.get("aspect_ratio", "4:3"),
         "description": pres.get("description", ""),
+        "color_settings": pres.get("color_settings", {
+            "primary": "#3B82F6",
+            "secondary": "#8B5CF6",
+            "accent": "#60A5FA",
+            "danger": "#EF4444",
+            "muted": "#9CA3AF",
+            "foreground": "#2C4074",
+            "background": "#EEE5D3"
+        }),
+        "font_settings": pres.get("font_settings", {
+            "primary": "Inter",
+            "secondary": "Source Serif Pro"
+        })
     })
 
 @app.route('/api/presentation/settings', methods=['POST'])
@@ -819,6 +1056,8 @@ def set_presentation_settings():
     title = data.get("title")
     description = data.get("description")
     aspect_ratio = data.get("aspect_ratio")
+    color_settings = data.get("color_settings")
+    font_settings = data.get("font_settings")
     
     manager = PresentationManager()
     errors = []
@@ -835,6 +1074,14 @@ def set_presentation_settings():
         # Update aspect ratio if provided
         if aspect_ratio:
             manager.set_presentation_aspect_ratio(pres_name, aspect_ratio)
+        
+        # Update color settings if provided
+        if color_settings:
+            manager.set_presentation_color_settings(pres_name, color_settings)
+        
+        # Update font settings if provided
+        if font_settings:
+            manager.set_presentation_font_settings(pres_name, font_settings)
         
         # Recompile
         if presentation_dir and os.path.exists(presentation_dir):
@@ -1253,3 +1500,275 @@ def serve_file():
         return "File not found", 404
     
     return send_file(full_path)
+
+@app.route('/api/presentation/prompts', methods=['GET'])
+def get_prompts():
+    """Get the actual prompts used by the agents, showing what goes to the models."""
+    global current_service
+    
+    pres_name = None
+    presentation_dir = None
+    if current_service and current_service.agent.context:
+        pres_name = current_service.agent.context.get('name')
+        presentation_dir = current_service.agent.presentation_dir
+    
+    if not pres_name:
+        return jsonify({"error": "No presentation loaded"}), 400
+    
+    manager = PresentationManager()
+    pres = manager.get_presentation(pres_name)
+    
+    if not pres:
+        return jsonify({"error": "Presentation not found"}), 404
+    
+    # Import prompt templates
+    from deckbot.nano_banana import PROMPT_TEMPLATES
+    
+    # Get presentation agent system prompt (from agent.py)
+    # We'll build a simplified version showing the structure
+    presentation_agent_prompt = {
+        "type": "system_prompt",
+        "description": "System instructions for the presentation agent (Gemini 3 Pro)",
+        "sections": [
+            {
+                "name": "Current Presentation Context",
+                "source": "dynamic",
+                "description": "Includes presentation name, description, template instructions"
+            },
+            {
+                "name": "File Context",
+                "source": "dynamic",
+                "description": "Current content of all markdown files in the presentation"
+            },
+            {
+                "name": "Design & Aesthetics",
+                "source": "metadata.json → design_opinions",
+                "description": "Design preferences (icons, colors, typography)"
+            },
+            {
+                "name": "Image Sizing & Styling",
+                "source": "hardcoded",
+                "description": "Marp image sizing directives documentation"
+            },
+            {
+                "name": "Capabilities & Tools",
+                "source": "hardcoded",
+                "description": "List of available tools and their usage"
+            }
+        ],
+        "note": "Full prompt is built dynamically in agent.py _build_system_prompt() method"
+    }
+    
+    # Get current presentation settings for context
+    aspect_ratio = pres.get("aspect_ratio", "4:3")
+    metadata = pres
+    theme_info = ""  # Would need to extract from deck.marp.md
+    
+    # Build image agent prompts for different scenarios
+    image_agent_prompts = {
+        "generating": {
+            "description": "Fresh image generation (generate_image tool)",
+            "system_instructions": {
+                "aspect_ratio": PROMPT_TEMPLATES['system_instructions']['aspect_ratio'].format(
+                    aspect_ratio_instruction=PROMPT_TEMPLATES['aspect_ratio'].get(aspect_ratio, f"image with {aspect_ratio} aspect ratio")
+                ),
+                "style_reference": PROMPT_TEMPLATES['system_instructions']['style_reference'],
+                "remix": None,  # Not used for fresh generation
+                "style_prompt": "Style instructions: {from metadata.json → image_style.prompt}",
+                "design_opinions": "Design opinions: {from metadata.json → design_opinions}",
+                "theme_info": "{from deck.marp.md CSS: fonts and colors}"
+            },
+            "user_message": {
+                "style_prefix": PROMPT_TEMPLATES['user_message_prefixes']['style_reference'],
+                "remix_prefix": None,
+                "base_prompt": "{user's request}",
+                "theme_info": "{from deck.marp.md CSS}",
+                "style_prompt": "Style instructions: {from metadata.json}"
+            },
+            "contents_order": [
+                "style_reference_image (if images/style.png exists)",
+                "system_message (system instructions as text)",
+                "user_message (user prompt with prefixes)"
+            ]
+        },
+        "remix_slide": {
+            "description": "Remixing an entire slide (remix_slide tool)",
+            "system_instructions": {
+                "aspect_ratio": PROMPT_TEMPLATES['system_instructions']['aspect_ratio'].format(
+                    aspect_ratio_instruction=PROMPT_TEMPLATES['aspect_ratio'].get(aspect_ratio, f"image with {aspect_ratio} aspect ratio")
+                ),
+                "style_reference": PROMPT_TEMPLATES['system_instructions']['style_reference'] if pres.get("image_style", {}).get("style_reference") else None,
+                "remix": PROMPT_TEMPLATES['system_instructions']['remix'],
+                "style_prompt": "Style instructions: {from metadata.json → image_style.prompt}",
+                "design_opinions": "Design opinions: {from metadata.json → design_opinions}",
+                "theme_info": "{from deck.marp.md CSS: fonts and colors}"
+            },
+            "user_message": {
+                "style_prefix": PROMPT_TEMPLATES['user_message_prefixes']['style_reference'] if pres.get("image_style", {}).get("style_reference") else None,
+                "remix_prefix": PROMPT_TEMPLATES['user_message_prefixes']['remix'],
+                "base_prompt": "{user's remix request}",
+                "theme_info": "{from deck.marp.md CSS}",
+                "style_prompt": "Style instructions: {from metadata.json}"
+            },
+            "contents_order": [
+                "style_reference_image (if images/style.png exists)",
+                "remix_reference_image (rendered slide)",
+                "system_message (system instructions as text)",
+                "user_message (user prompt with prefixes)"
+            ]
+        },
+        "remix_image": {
+            "description": "Remixing a specific image file (remix_image tool)",
+            "system_instructions": {
+                "aspect_ratio": PROMPT_TEMPLATES['system_instructions']['aspect_ratio'].format(
+                    aspect_ratio_instruction=PROMPT_TEMPLATES['aspect_ratio'].get(aspect_ratio, f"image with {aspect_ratio} aspect ratio")
+                ),
+                "style_reference": PROMPT_TEMPLATES['system_instructions']['style_reference'] if pres.get("image_style", {}).get("style_reference") else None,
+                "remix": PROMPT_TEMPLATES['system_instructions']['remix'],
+                "style_prompt": "Style instructions: {from metadata.json → image_style.prompt}",
+                "design_opinions": "Design opinions: {from metadata.json → design_opinions}",
+                "theme_info": "{from deck.marp.md CSS: fonts and colors}"
+            },
+            "user_message": {
+                "style_prefix": PROMPT_TEMPLATES['user_message_prefixes']['style_reference'] if pres.get("image_style", {}).get("style_reference") else None,
+                "remix_prefix": PROMPT_TEMPLATES['user_message_prefixes']['remix'],
+                "base_prompt": "{user's remix request}",
+                "theme_info": "{from deck.marp.md CSS}",
+                "style_prompt": "Style instructions: {from metadata.json}"
+            },
+            "contents_order": [
+                "style_reference_image (if images/style.png exists)",
+                "remix_reference_image (specific image file)",
+                "system_message (system instructions as text)",
+                "user_message (user prompt with prefixes)"
+            ]
+        }
+    }
+    
+    return jsonify({
+        "presentation_agent": presentation_agent_prompt,
+        "image_agent": image_agent_prompts,
+        "prompt_templates": PROMPT_TEMPLATES
+    })
+
+@app.route('/api/presentation/agent-prompt', methods=['GET'])
+def get_agent_prompt():
+    """Get the actual processed system prompt for the presentation agent."""
+    global current_service
+    
+    if not current_service or not current_service.agent:
+        return jsonify({"error": "No presentation loaded"}), 400
+    
+    # Get the actual system prompt from the agent
+    system_prompt = current_service.agent._build_system_prompt()
+    
+    return jsonify({
+        "system_prompt": system_prompt
+    })
+
+@app.route('/api/presentation/image-prompts', methods=['GET'])
+def get_image_prompts():
+    """Get the actual processed prompts for image generation with a test prompt."""
+    global current_service
+    
+    pres_name = None
+    presentation_dir = None
+    if current_service and current_service.agent.context:
+        pres_name = current_service.agent.context.get('name')
+        presentation_dir = current_service.agent.presentation_dir
+    
+    if not pres_name:
+        return jsonify({"error": "No presentation loaded"}), 400
+    
+    manager = PresentationManager()
+    pres = manager.get_presentation(pres_name)
+    
+    if not pres:
+        return jsonify({"error": "Presentation not found"}), 404
+    
+    test_prompt = request.args.get('prompt', 'a blue circle')
+    aspect_ratio = pres.get("aspect_ratio", "4:3")
+    
+    # Import and use ImagePromptBuilder
+    from deckbot.nano_banana import ImagePromptBuilder
+    import re
+    
+    # Extract theme info from deck.marp.md
+    theme_info = ""
+    deck_path = os.path.join(presentation_dir, "deck.marp.md")
+    if os.path.exists(deck_path):
+        try:
+            with open(deck_path, "r") as f:
+                content = f.read()
+            if content.startswith("---"):
+                parts = content.split("---", 2)
+                if len(parts) >= 2:
+                    front_matter = parts[1]
+                    style_match = re.search(r'^style:\s*\|(.+?)(?=^[a-z]+:|\Z)', front_matter, re.MULTILINE | re.DOTALL)
+                    if style_match:
+                        css_block = style_match.group(1).strip()
+                        font_matches = re.findall(r'font-family:\s*[\'"]?([^;\'"]+)', css_block)
+                        color_matches = re.findall(r'color:\s*(#[0-9a-fA-F]{3,6})', css_block)
+                        if font_matches:
+                            theme_info += f"Fonts: {', '.join(font_matches)}. "
+                        if color_matches:
+                            theme_info += f"Colors: {', '.join(color_matches)}. "
+        except Exception:
+            pass
+    
+    # Check for style reference image
+    has_style_ref = os.path.exists(os.path.join(presentation_dir, "images", "style.png"))
+    
+    # Build prompts for each scenario
+    prompt_builder = ImagePromptBuilder(
+        presentation_dir=presentation_dir,
+        metadata=pres,
+        theme_info=theme_info
+    )
+    
+    results = {}
+    
+    # Generating scenario
+    results['generating'] = {
+        "system_message": prompt_builder.build_system_instructions(aspect_ratio, has_style_ref, False),
+        "user_message": prompt_builder.build_user_message(test_prompt, has_style_ref, False)
+    }
+    
+    # Remix slide scenario
+    results['remix_slide'] = {
+        "system_message": prompt_builder.build_system_instructions(aspect_ratio, has_style_ref, True),
+        "user_message": prompt_builder.build_user_message(test_prompt, has_style_ref, True)
+    }
+    
+    # Remix image scenario (same as remix_slide)
+    results['remix_image'] = {
+        "system_message": prompt_builder.build_system_instructions(aspect_ratio, has_style_ref, True),
+        "user_message": prompt_builder.build_user_message(test_prompt, has_style_ref, True)
+    }
+    
+    return jsonify(results)
+
+# Catch-all route for client-side routing (must be last)
+@app.route('/<path:path>')
+def serve_static(path):
+    """Serve static files from Vite build in production, or catch-all for client-side routing."""
+    # Skip API routes and events
+    if path.startswith('api/') or path.startswith('events'):
+        return "Not found", 404
+    
+    if DEVELOPMENT:
+        # In development, don't serve static files (Vite handles it)
+        return "Frontend is served by Vite dev server. Access at http://localhost:5173", 404
+    
+    # Production: serve static files
+    file_path = os.path.join(VITE_DIST_PATH, path)
+    if os.path.exists(file_path) and os.path.isfile(file_path):
+        return send_file(file_path)
+    
+    # Fallback to index.html for client-side routing
+    index_path = os.path.join(VITE_DIST_PATH, 'index.html')
+    if os.path.exists(index_path):
+        with open(index_path, 'r') as f:
+            return f.read()
+    
+    return "Not found", 404

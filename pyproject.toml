@@ -26,6 +26,7 @@ dependencies = [
     "requests",
     "Pillow",
     "flask",
+    "flask-cors",
     "pyyaml",
     "cssutils"
 ]

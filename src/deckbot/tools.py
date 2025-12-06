@@ -89,28 +89,36 @@ class PresentationTools:
             
             # Generate a unique call ID for this tool invocation
             call_id = str(uuid.uuid4())
-            
+
+            print(f"[TOOL] Executing {tool_name} with args: {normalized_args}")
+
             if self.on_tool_call:
                 # Include normalized args and call_id
                 self.on_tool_call("tool_start", {
-                    "tool": tool_name, 
+                    "tool": tool_name,
                     "args": normalized_args,
                     "call_id": call_id
                 })
             try:
+                import time
+                start_time = time.time()
                 result = func(*args, **kwargs)
+                elapsed = time.time() - start_time
+                print(f"[TOOL] {tool_name} completed in {elapsed:.2f}s, result length: {len(str(result)) if result else 0}")
+
                 if self.on_tool_call:
                     self.on_tool_call("tool_end", {
-                        "tool": tool_name, 
+                        "tool": tool_name,
                         "result": str(result),
                         "args": normalized_args,
                         "call_id": call_id
                     })
                 return result
             except Exception as e:
+                print(f"[TOOL] {tool_name} ERROR: {type(e).__name__}: {e}")
                 if self.on_tool_call:
                     self.on_tool_call("tool_error", {
-                        "tool": tool_name, 
+                        "tool": tool_name,
                         "error": str(e),
                         "args": normalized_args,
                         "call_id": call_id
