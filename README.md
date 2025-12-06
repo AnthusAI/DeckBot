@@ -182,5 +182,5 @@ This project is licensed under the MIT License. See the LICENSE file for details
 ---
 
 <p align="center">
-  <i>Built with ❤️, Python, and Gemini. ((And Claude.  And GPT.  And Nano Banana.)</i>
+  <i>Built with ❤️, Python, and Gemini. (And Claude.  And GPT.  And Nano Banana.)</i>
 </p>
