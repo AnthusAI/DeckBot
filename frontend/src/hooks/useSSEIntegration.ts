@@ -65,5 +65,35 @@ export function useSSEIntegration() {
   useEventSource('tool_result', () => {
     // Tool results are handled via regular messages
   })
+
+  // Handle command results
+  useEventSource('command_result', (data: any) => {
+    const { command, content, format, message } = data
+
+    // Note: /fast toggle is handled directly in ChatInput, not here
+    if (command === 'export') {
+      addMessage({
+        role: 'system',
+        content: message || 'PDF exported successfully'
+      } as Message)
+      // Could also trigger a download here if needed
+    } else if (command === 'help' || command === 'tools') {
+      // Display formatted help/tools content
+      addMessage({
+        role: 'system',
+        content: content,
+        message_type: format || 'markdown'
+      } as any)
+    }
+  })
+
+  // Handle command errors
+  useEventSource('command_error', (data: any) => {
+    const { command, error } = data
+    addMessage({
+      role: 'system',
+      content: `Command /${command} failed: ${error}`
+    } as Message)
+  })
 }
 

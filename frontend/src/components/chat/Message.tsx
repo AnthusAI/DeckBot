@@ -38,7 +38,12 @@ export function Message({ message }: MessageProps) {
     // Text message (most common case)
     if ('content' in message && message.content) {
       const html = marked.parse(message.content)
-      return <div dangerouslySetInnerHTML={{ __html: html }} />
+      return (
+        <div
+          className="markdown-content"
+          dangerouslySetInnerHTML={{ __html: html }}
+        />
+      )
     }
     
     // Rich message - handle different types

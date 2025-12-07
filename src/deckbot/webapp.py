@@ -668,6 +668,166 @@ def load_presentation():
     history = current_service.get_history()
     return jsonify({"message": "Loaded", "history": history, "presentation": presentation})
 
+@app.route('/api/command', methods=['POST'])
+def command():
+    """Handle slash commands"""
+    print("[COMMAND] /api/command endpoint hit")
+    global current_service
+
+    data = request.json
+    command_name = data.get('command', '').lower()
+    args = data.get('args', '').strip()
+    presentation_name = data.get('presentation_name')
+    current_slide = data.get('current_slide', 1)
+
+    print(f"[COMMAND] command={command_name}, args='{args[:50] if args else ''}', pres={presentation_name}")
+
+    # Ensure we have a presentation loaded if one was provided
+    # (This allows logging even for help/tools commands)
+    if presentation_name:
+        if not current_service or current_service.agent.context.get('name') != presentation_name:
+            manager = PresentationManager()
+            presentation = manager.get_presentation(presentation_name)
+            if not presentation:
+                return jsonify({"error": "Presentation not found"}), 404
+            current_service = SessionService(presentation)
+
+    # Handle different commands
+    if command_name == 'fast':
+        # If args provided, send one-shot message with secondary model
+        if args:
+            # Route to chat with secondary model
+            def run_chat():
+                try:
+                    print(f"[COMMAND] Fast one-shot: {args[:100]}")
+                    current_service.send_message(args, current_slide=current_slide, force_model='secondary')
+                except Exception as e:
+                    print(f"[COMMAND] ERROR: {e}")
+                    import traceback
+                    traceback.print_exc()
+
+            # Save user message before starting thread
+            if current_service.agent:
+                current_service.agent._log_message("user", args)
+
+            threading.Thread(target=run_chat, daemon=True).start()
+            return jsonify({"status": "processing"})
+        else:
+            # Just toggle (frontend handles state)
+            # Send confirmation event via SSE
+            if current_service:
+                current_service.emit_event('command_result', {
+                    'command': 'fast',
+                    'message': 'Fast mode toggled'
+                })
+            return jsonify({"status": "toggled"})
+
+    elif command_name == 'export':
+        # Export presentation to PDF
+        if not current_service:
+            return jsonify({"error": "No presentation loaded"}), 400
+
+        def run_export():
+            try:
+                result = current_service.agent.tools_handler.export_pdf()
+                # Emit success event with file path
+                current_service.emit_event('command_result', {
+                    'command': 'export',
+                    'message': result,
+                    'success': True
+                })
+            except Exception as e:
+                current_service.emit_event('command_error', {
+                    'command': 'export',
+                    'error': str(e)
+                })
+
+        threading.Thread(target=run_export, daemon=True).start()
+        return jsonify({"status": "exporting"})
+
+    elif command_name == 'help':
+        # Load and return help.md
+        help_path = os.path.join(os.path.dirname(__file__), 'help.md')
+        try:
+            with open(help_path, 'r') as f:
+                help_content = f.read()
+
+            # Log to chat history if we have a service
+            if current_service and current_service.agent:
+                current_service.agent._log_message("user", "/help")
+                current_service.agent._log_message("system", help_content)
+
+            # Return the content directly - the frontend will display it
+            return jsonify({
+                "status": "help_sent",
+                "content": help_content,
+                "format": "markdown"
+            })
+        except FileNotFoundError:
+            return jsonify({"error": "Help file not found"}), 404
+
+    elif command_name == 'tools':
+        # List available agent tools - this requires loading a presentation to get the agent
+        # But we can provide a generic list or load it lazily
+        if current_service and current_service.agent and current_service.agent.tools_list:
+            # Get tool list from agent
+            tools_info = []
+            for tool in current_service.agent.tools_list:
+                tool_name = tool.__name__ if hasattr(tool, '__name__') else str(tool)
+                tool_doc = tool.__doc__ if hasattr(tool, '__doc__') else ''
+                # Clean up docstring
+                if tool_doc:
+                    tool_doc = tool_doc.strip().split('\n')[0]  # First line only
+                tools_info.append({
+                    'name': tool_name,
+                    'description': tool_doc or 'No description available'
+                })
+        else:
+            # Provide a static list of common tools when no presentation is loaded
+            tools_info = [
+                {'name': 'list_files', 'description': 'List all files in the presentation directory'},
+                {'name': 'read_file', 'description': 'Read the contents of a file'},
+                {'name': 'write_file', 'description': 'Write or overwrite a file'},
+                {'name': 'replace_text', 'description': 'Find and replace text in a file'},
+                {'name': 'generate_image', 'description': 'Generate AI images for slides'},
+                {'name': 'compile_presentation', 'description': 'Compile Markdown to HTML presentation'},
+                {'name': 'export_pdf', 'description': 'Export presentation as PDF'},
+                {'name': 'go_to_slide', 'description': 'Navigate to a specific slide'},
+                {'name': 'inspect_slide', 'description': 'Visual inspection of a slide using AI'},
+                {'name': 'validate_deck', 'description': 'Check presentation for errors'},
+            ]
+
+        # Format as markdown with better spacing and emphasis
+        tools_content = "# Available Agent Tools\n\n"
+        tools_content += "The AI agent has access to the following tools:\n\n"
+        tools_content += "---\n\n"
+        for i, tool in enumerate(tools_info):
+            tools_content += f"### `{tool['name']}`\n\n"
+            tools_content += f"{tool['description']}\n\n"
+            if i < len(tools_info) - 1:  # Add separator between tools
+                tools_content += "---\n\n"
+
+        # Log to chat history if we have a service
+        if current_service and current_service.agent:
+            current_service.agent._log_message("user", "/tools")
+            current_service.agent._log_message("system", tools_content)
+
+        return jsonify({
+            "status": "tools_sent",
+            "content": tools_content,
+            "format": "markdown",
+            "tools": tools_info
+        })
+
+    else:
+        # Unknown command
+        if current_service:
+            current_service.emit_event('command_error', {
+                'command': command_name,
+                'error': f'Unknown command: /{command_name}'
+            })
+        return jsonify({"error": f"Unknown command: /{command_name}"}), 400
+
 @app.route('/api/chat', methods=['POST'])
 def chat():
     print("[CHAT] /api/chat endpoint hit")
@@ -676,6 +836,7 @@ def chat():
     # Get state parameters from request (new behavior)
     presentation_name = None
     current_slide = 1
+    model = None  # New: model selection parameter
 
     # Handle both JSON and form data (for image uploads)
     user_input = ""
@@ -686,13 +847,15 @@ def chat():
         user_input = data.get('message', '')
         presentation_name = data.get('presentation_name')
         current_slide = data.get('current_slide', 1)
-        print(f"[CHAT] JSON request: message='{user_input[:50]}...', pres={presentation_name}, slide={current_slide}")
+        model = data.get('model', 'primary')  # New: get model parameter
+        print(f"[CHAT] JSON request: message='{user_input[:50]}...', pres={presentation_name}, slide={current_slide}, model={model}")
     else:
         # Form data with images
         user_input = request.form.get('message', '')
         presentation_name = request.form.get('presentation_name')
         current_slide = int(request.form.get('current_slide', 1))
-        print(f"[CHAT] Form request: message='{user_input[:50]}...', pres={presentation_name}, slide={current_slide}")
+        model = request.form.get('model', 'primary')  # New: get model parameter
+        print(f"[CHAT] Form request: message='{user_input[:50]}...', pres={presentation_name}, slide={current_slide}, model={model}")
 
     # Fallback: use global session if no presentation_name provided (backward compatibility)
     if not presentation_name and current_service:
@@ -759,10 +922,10 @@ def chat():
                 image_refs = " ".join([f"[Image: {path}]" for path in uploaded_images])
                 full_message = f"{user_input} {image_refs}".strip()
                 print(f"[CHAT] Sending with images: {full_message[:100]}")
-                current_service.send_message(full_message, current_slide=current_slide)
+                current_service.send_message(full_message, current_slide=current_slide, force_model=model if model != 'primary' else None)
             else:
                 print(f"[CHAT] Sending message: {user_input[:100]}")
-                current_service.send_message(user_input, current_slide=current_slide)
+                current_service.send_message(user_input, current_slide=current_slide, force_model=model if model != 'primary' else None)
             print("[CHAT] send_message completed")
         except Exception as e:
             print(f"[CHAT] ERROR in thread: {e}")

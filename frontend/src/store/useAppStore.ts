@@ -9,24 +9,29 @@ interface AppState {
   colorTheme: ColorTheme
   setTheme: (theme: Theme) => void
   setColorTheme: (colorTheme: ColorTheme) => void
-  
+
   // Current presentation
   currentPresentation: Presentation | null
   currentSlide: number
   setCurrentPresentation: (presentation: Presentation | null) => void
   setCurrentSlide: (slide: number) => void
-  
+
   // Preferences
   preferences: Preferences
   setPreferences: (prefs: Partial<Preferences>) => void
-  
+
   // View state
   activeView: 'preview' | 'code' | 'layouts' | 'settings'
   setActiveView: (view: 'preview' | 'code' | 'layouts' | 'settings') => void
-  
+
   // Welcome screen
   showWelcomeScreen: boolean
   setShowWelcomeScreen: (show: boolean) => void
+
+  // Fast mode (use secondary model)
+  fastMode: boolean
+  setFastMode: (enabled: boolean) => void
+  toggleFastMode: () => void
 }
 
 export const useAppStore = create<AppState>()(
@@ -48,7 +53,10 @@ export const useAppStore = create<AppState>()(
       
       // Welcome screen
       showWelcomeScreen: true,
-      
+
+      // Fast mode
+      fastMode: false,
+
       // Actions
       setTheme: (theme) => {
         set({ theme })
@@ -87,8 +95,12 @@ export const useAppStore = create<AppState>()(
       })),
       
       setActiveView: (view) => set({ activeView: view }),
-      
+
       setShowWelcomeScreen: (show) => set({ showWelcomeScreen: show }),
+
+      setFastMode: (enabled) => set({ fastMode: enabled }),
+
+      toggleFastMode: () => set((state) => ({ fastMode: !state.fastMode })),
     }),
     {
       name: 'deckbot-app-storage',
@@ -98,6 +110,7 @@ export const useAppStore = create<AppState>()(
         currentSlide: state.currentSlide,
         preferences: state.preferences,
         activeView: state.activeView,
+        fastMode: state.fastMode,
       }),
     }
   )

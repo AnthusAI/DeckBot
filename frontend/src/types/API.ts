@@ -120,6 +120,8 @@ export type SSEEventType =
   | 'tool_call'
   | 'tool_result'
   | 'agent_request_details'
+  | 'command_result'
+  | 'command_error'
   | 'error'
 
 export interface SSEEvent {

@@ -74,6 +74,10 @@ class SessionService:
                 except Exception as e:
                     print(f"Error in listener: {e}")
 
+    def emit_event(self, event_type: str, data: Any = None):
+        """Public method to emit events (used by command endpoint)"""
+        self._notify(event_type, data)
+
     def _log_rich_message(self, message_type: str, role: str, data: Dict[str, Any], content: str = None):
         """
         Log a rich message to chat_history.jsonl for UI reconstruction.
@@ -147,9 +151,9 @@ class SessionService:
             content=details.get('user_message', '')
         )
 
-    def send_message(self, user_input: str, status_spinner=None, current_slide=None) -> str:
+    def send_message(self, user_input: str, status_spinner=None, current_slide=None, force_model=None) -> str:
         """Send a message to the agent and get the response."""
-        print(f"[SESSION] send_message called with: {user_input[:100]}... (slide={current_slide})")
+        print(f"[SESSION] send_message called with: {user_input[:100]}... (slide={current_slide}, force_model={force_model})")
 
         # Clear cancellation flag at start of new request
         self._cancelled = False
@@ -166,7 +170,8 @@ class SessionService:
                 user_input,
                 status_spinner=status_spinner,
                 cancelled_flag=self,
-                current_slide=current_slide
+                current_slide=current_slide,
+                force_model=force_model
             )
             print(f"[SESSION] Agent.chat() returned: {response[:100] if response else 'None'}...")
             print("[SESSION] Notifying model response via SSE")

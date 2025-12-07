@@ -549,14 +549,22 @@ When the user asks for an image:
                 continue
         print("Error: Could not initialize any Gemini model. Please check your API key and network connection.")
 
-    def _generate_with_fallback(self, contents):
+    def _generate_with_fallback(self, contents, force_model=None):
         """
-        Attempt generation with current model. 
+        Attempt generation with current model.
         If 429/Resource Exhausted occurs, switch to secondary model and retry.
+        If force_model is specified, use that model instead.
         """
+        # Determine which model to use
+        if force_model == 'secondary':
+            model_to_use = self.secondary_model_name
+            print(f"[AGENT] Using forced secondary model: {model_to_use}")
+        else:
+            model_to_use = self.model_name
+
         try:
             return self.client.models.generate_content(
-                model=self.model_name,
+                model=model_to_use,
                 contents=contents,
                 config=types.GenerateContentConfig(
                     tools=self.tools_list,
@@ -570,17 +578,18 @@ When the user asks for an image:
             error_str = str(e)
             # print(f"DEBUG: Error string: {error_str}") # Debug
             is_resource_exhausted = "429" in error_str or "RESOURCE_EXHAUSTED" in error_str
-            
+
             if is_resource_exhausted:
                 # print(f"DEBUG: Resource exhausted. Current: {self.model_name}, Secondary: {self.secondary_model_name}")
                 # If we haven't switched yet and have a secondary model
-                if self.model_name != self.secondary_model_name and self.secondary_model_name:
-                    print(f"Resource exhausted on {self.model_name}. Switching to secondary model: {self.secondary_model_name}")
+                # Don't fallback if we're already using forced secondary model
+                if model_to_use != self.secondary_model_name and self.secondary_model_name:
+                    print(f"Resource exhausted on {model_to_use}. Switching to secondary model: {self.secondary_model_name}")
                     self.model_name = self.secondary_model_name
-                    
+
                     # Retry with new model
                     return self.client.models.generate_content(
-                        model=self.model_name,
+                        model=self.secondary_model_name,
                         contents=contents,
                         config=types.GenerateContentConfig(
                             tools=self.tools_list,
@@ -592,8 +601,8 @@ When the user asks for an image:
             # Re-raise if not handled
             raise e
 
-    def chat(self, user_input, status_spinner=None, cancelled_flag=None, current_slide=None):
-        print(f"[AGENT] chat() called with input: {user_input[:100]}... (slide={current_slide})")
+    def chat(self, user_input, status_spinner=None, cancelled_flag=None, current_slide=None, force_model=None):
+        print(f"[AGENT] chat() called with input: {user_input[:100]}... (slide={current_slide}, force_model={force_model})")
 
         if not self.model or not self.client:
             print("[AGENT] ERROR: No model or client initialized")
@@ -645,10 +654,14 @@ When the user asks for an image:
             for msg in self.history:
                 # Trust the role from history
                 role = msg.get("role", "user")
-                
+
+                # Skip system messages - Gemini API doesn't support system role
+                if role == "system":
+                    continue
+
                 msg_parts = msg.get("parts", [])
                 content_parts = []
-                
+
                 for p in msg_parts:
                     if isinstance(p, types.Part):
                         content_parts.append(p)
@@ -656,7 +669,7 @@ When the user asks for an image:
                         content_parts.append(types.Part(text=p))
                     # If other types (dict), assume already handled or ignore?
                     # load_history ensures types.Part.
-                
+
                 if content_parts:
                     contents.append(types.Content(
                         role=role,
@@ -686,7 +699,7 @@ When the user asks for an image:
             # Make the API call with automatic function calling
             print(f"[AGENT] Making API call to {self.model_name} with {len(contents)} content items...")
             try:
-                response = self._generate_with_fallback(contents)
+                response = self._generate_with_fallback(contents, force_model=force_model)
                 print("[AGENT] API call completed successfully")
 
                 # Check for cancellation after API call

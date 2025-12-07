@@ -32,15 +32,8 @@ export class SSEService {
       this.handleReconnect()
     }
 
-    // Handle all event types dynamically
-    this.eventSource.onmessage = (event) => {
-      try {
-        const parsed = JSON.parse(event.data)
-        this.handleEvent('message', parsed)
-      } catch (e) {
-        console.error('[SSE] Failed to parse message:', e)
-      }
-    }
+    // Don't use onmessage - let specific event listeners handle everything
+    // this.eventSource.onmessage would duplicate events
 
     // Set up listeners for specific event types
     const eventTypes: SSEEventType[] = [
@@ -57,6 +50,8 @@ export class SSEService {
       'tool_call',
       'tool_result',
       'agent_request_details',
+      'command_result',
+      'command_error',
       'error',
     ]
 

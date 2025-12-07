@@ -1,6 +1,7 @@
 import click
 import subprocess
 import os
+import sys
 from rich.console import Console
 from rich.prompt import Prompt, IntPrompt
 from deckbot.manager import PresentationManager

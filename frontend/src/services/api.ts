@@ -24,10 +24,15 @@ import type {
 let API_BASE = import.meta.env.DEV ? '' : ''
 let configFetched = false
 
+// Export API_BASE for components that need direct access
+export function getAPIBase() {
+  return API_BASE
+}
+
 // Fetch API configuration from backend (only in dev mode when using proxy)
 async function ensureConfig() {
   if (configFetched || !import.meta.env.DEV) return
-  
+
   try {
     await fetch('/api/config')
     // In dev mode with Vite proxy, we don't need to change API_BASE
@@ -41,7 +46,7 @@ async function ensureConfig() {
 
 async function fetchJSON<T>(url: string, options?: RequestInit): Promise<T> {
   await ensureConfig()
-  
+
   const response = await fetch(`${API_BASE}${url}`, {
     ...options,
     headers: {
@@ -59,6 +64,8 @@ async function fetchJSON<T>(url: string, options?: RequestInit): Promise<T> {
 }
 
 async function fetchFormData<T>(url: string, formData: FormData): Promise<T> {
+  await ensureConfig()
+
   const response = await fetch(`${API_BASE}${url}`, {
     method: 'POST',
     body: formData,
@@ -170,11 +177,49 @@ export const templatesAPI = {
 export const chatAPI = {
   send: (data: ChatRequest): Promise<{ status: string }> =>
     fetchFormData('/api/chat', createChatFormData(data)),
-  
+
+  sendJSON: async (data: { message: string; presentation_name: string; current_slide: number; model: string }): Promise<{ status: string }> => {
+    await ensureConfig()
+    const response = await fetch(`${API_BASE}/api/chat`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(data),
+    })
+    if (!response.ok) {
+      throw new Error('Failed to send message')
+    }
+    return response.json()
+  },
+
+  sendFormData: async (formData: FormData): Promise<{ status: string }> => {
+    return fetchFormData('/api/chat', formData)
+  },
+
   cancel: (): Promise<{ status: string }> =>
     fetchJSON('/api/chat/cancel', {
       method: 'POST',
     }),
+}
+
+// Command APIs
+export const commandAPI = {
+  execute: async (data: { command: string; args: string; presentation_name: string; current_slide: number }): Promise<{ status: string; content?: string; format?: string; tools?: any[] }> => {
+    await ensureConfig()
+    const response = await fetch(`${API_BASE}/api/command`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(data),
+    })
+    if (!response.ok) {
+      const errorData = await response.json()
+      throw new Error(errorData.error || 'Command failed')
+    }
+    return response.json()
+  },
 }
 
 // Image APIs
@@ -227,7 +272,7 @@ export const preferencesAPI = {
 }
 
 // Helper functions
-function createChatFormData(data: ChatRequest): FormData {
+function createChatFormData(data: ChatRequest & { model?: string }): FormData {
   const formData = new FormData()
   formData.append('message', data.message)
   if (data.presentation_name) {
@@ -235,6 +280,9 @@ function createChatFormData(data: ChatRequest): FormData {
   }
   if (data.current_slide) {
     formData.append('current_slide', String(data.current_slide))
+  }
+  if (data.model) {
+    formData.append('model', data.model)
   }
   // Note: Image uploads would be added separately as image_0, image_1, etc.
   return formData
