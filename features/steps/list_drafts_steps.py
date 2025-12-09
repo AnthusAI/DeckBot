@@ -7,12 +7,19 @@ from unittest.mock import MagicMock
 
 @given('I create a directory "{dirname}" in "{pres_name}"')
 def step_impl(context, dirname, pres_name):
-    path = os.path.join(context.temp_dir, pres_name, dirname)
+    manager = PresentationManager(root_dir=context.temp_dir)
+    pres = manager.get_presentation(pres_name)
+    dir_name = pres.get('_dir_name', pres_name)
+    path = os.path.join(context.temp_dir, 'presentations', dir_name, dirname)
     os.makedirs(path, exist_ok=True)
 
 @given('I create a file "{filename}" in "{pres_name}"')
 def step_impl(context, filename, pres_name):
-    path = os.path.join(context.temp_dir, pres_name, filename)
+    manager = PresentationManager(root_dir=context.temp_dir)
+    pres = manager.get_presentation(pres_name)
+    dir_name = pres.get('_dir_name', pres_name)
+    path = os.path.join(context.temp_dir, 'presentations', dir_name, filename)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, 'w') as f:
         f.write("content")
 

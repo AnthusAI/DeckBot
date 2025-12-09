@@ -6,7 +6,12 @@ from deckbot.webapp import app
 
 @given('the presentation has a "metadata.json" file')
 def step_impl(context):
-    pres_dir = os.path.join(context.temp_dir, context.pres_name)
+    from deckbot.manager import PresentationManager
+    manager = PresentationManager(root_dir=context.temp_dir)
+    pres = manager.get_presentation(context.pres_name)
+    dir_name = pres.get('_dir_name', context.pres_name)
+    pres_dir = os.path.join(context.temp_dir, 'presentations', dir_name)
+
     metadata = {
         "name": context.pres_name,
         "image_style": {}
@@ -16,7 +21,11 @@ def step_impl(context):
 
 @given('the presentation has the following styling in metadata:')
 def step_impl(context):
-    pres_dir = os.path.join(context.temp_dir, context.pres_name)
+    from deckbot.manager import PresentationManager
+    manager = PresentationManager(root_dir=context.temp_dir)
+    pres = manager.get_presentation(context.pres_name)
+    dir_name = pres.get('_dir_name', context.pres_name)
+    pres_dir = os.path.join(context.temp_dir, 'presentations', dir_name)
     with open(os.path.join(pres_dir, "metadata.json"), "r") as f:
         metadata = json.load(f)
     
@@ -37,7 +46,11 @@ def step_impl(context):
 
 @given('the presentation has a style reference image "{path}"')
 def step_impl(context, path):
-    pres_dir = os.path.join(context.temp_dir, context.pres_name)
+    from deckbot.manager import PresentationManager
+    manager = PresentationManager(root_dir=context.temp_dir)
+    pres = manager.get_presentation(context.pres_name)
+    dir_name = pres.get('_dir_name', context.pres_name)
+    pres_dir = os.path.join(context.temp_dir, 'presentations', dir_name)
     # Create dummy file (using minimal valid PNG bytes for PIL)
     full_path = os.path.join(pres_dir, path)
     os.makedirs(os.path.dirname(full_path), exist_ok=True)
@@ -111,7 +124,11 @@ def step_impl(context):
 
 @then('the "metadata.json" should contain:')
 def step_impl(context):
-    pres_dir = os.path.join(context.temp_dir, context.pres_name)
+    from deckbot.manager import PresentationManager
+    manager = PresentationManager(root_dir=context.temp_dir)
+    pres = manager.get_presentation(context.pres_name)
+    dir_name = pres.get('_dir_name', context.pres_name)
+    pres_dir = os.path.join(context.temp_dir, 'presentations', dir_name)
     with open(os.path.join(pres_dir, "metadata.json"), "r") as f:
         metadata = json.load(f)
         
@@ -129,14 +146,24 @@ def step_impl(context):
 
 @then('the file "{path}" should not exist in the presentation directory')
 def step_impl(context, path):
-    pres_dir = os.path.join(context.temp_dir, context.pres_name)
+    from deckbot.manager import PresentationManager
+    manager = PresentationManager(root_dir=context.temp_dir)
+    pres = manager.get_presentation(context.pres_name)
+    dir_name = pres.get('_dir_name', context.pres_name)
+    pres_dir = os.path.join(context.temp_dir, 'presentations', dir_name)
     full_path = os.path.join(pres_dir, path)
     assert not os.path.exists(full_path), f"File {path} should not exist but it does"
 
 @then('the file "{path}" should exist in the presentation directory')
 def step_impl(context, path):
-    pres_dir = os.path.join(context.temp_dir, context.pres_name)
+    from deckbot.manager import PresentationManager
+    manager = PresentationManager(root_dir=context.temp_dir)
+    pres = manager.get_presentation(context.pres_name)
+    dir_name = pres.get('_dir_name', context.pres_name)
+    pres_dir = os.path.join(context.temp_dir, 'presentations', dir_name)
     full_path = os.path.join(pres_dir, path)
     assert os.path.exists(full_path), f"File {path} does not exist"
+
+
 
 

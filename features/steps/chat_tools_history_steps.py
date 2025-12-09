@@ -12,7 +12,9 @@ def step_impl(context, name):
     manager = PresentationManager(root_dir=context.temp_dir)
     if not manager.get_presentation(name):
         manager.create_presentation(name)
-    presentation_dir = os.path.join(context.temp_dir, name)
+    pres = manager.get_presentation(name)
+    dir_name = pres.get('_dir_name', name)
+    presentation_dir = os.path.join(context.temp_dir, 'presentations', dir_name)
     history_file = os.path.join(presentation_dir, "chat_history.jsonl")
     
     # Convert vertical table to dict
@@ -118,8 +120,11 @@ def step_impl(context, name, filename, content):
     manager = PresentationManager(root_dir=context.temp_dir)
     if not manager.get_presentation(name):
         manager.create_presentation(name)
-    presentation_dir = os.path.join(context.temp_dir, name)
+    pres = manager.get_presentation(name)
+    dir_name = pres.get('_dir_name', name)
+    presentation_dir = os.path.join(context.temp_dir, 'presentations', dir_name)
     file_path = os.path.join(presentation_dir, filename)
+    os.makedirs(os.path.dirname(file_path), exist_ok=True)
     with open(file_path, 'w') as f:
         f.write(content)
 
@@ -150,7 +155,8 @@ def step_impl(context):
     # For simplicity, check the last created one
     found = False
     for pres in presentations:
-        pres_dir = os.path.join(context.temp_dir, pres['name'])
+        dir_name = pres.get('_dir_name', pres['name'])
+        pres_dir = os.path.join(context.temp_dir, 'presentations', dir_name)
         history_file = os.path.join(pres_dir, "chat_history.jsonl")
         
         if os.path.exists(history_file):

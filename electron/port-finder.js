@@ -23,6 +23,24 @@ async function isPortAvailable(port) {
 }
 
 /**
+ * Check if a port is in use (opposite of isPortAvailable)
+ * @param {number} port - Port number to check
+ * @returns {Promise<boolean>} - True if port is in use
+ */
+async function isPortInUse(port) {
+  return new Promise((resolve) => {
+    const client = net.createConnection({ port, host: '127.0.0.1' }, () => {
+      client.end();
+      resolve(true); // Port is in use
+    });
+
+    client.on('error', () => {
+      resolve(false); // Port is not in use
+    });
+  });
+}
+
+/**
  * Find an available port starting from a given port
  * @param {number} startPort - Port to start searching from (default: 5555)
  * @returns {Promise<number>} - Available port number
@@ -41,4 +59,4 @@ async function findAvailablePort(startPort = 5555) {
   throw new Error(`No available ports found in range ${startPort}-${startPort + 99}`);
 }
 
-module.exports = { findAvailablePort, isPortAvailable };
+module.exports = { findAvailablePort, isPortAvailable, isPortInUse };

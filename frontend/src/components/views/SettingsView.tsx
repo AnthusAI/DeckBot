@@ -7,7 +7,7 @@ import FontPicker from 'react-fontpicker-ts'
 import 'react-fontpicker-ts/dist/index.css'
 
 export function SettingsView() {
-  const [activeTab, setActiveTab] = useState<'presentation' | 'style' | 'agent-prompts' | 'image-prompts'>('presentation')
+  const [activeTab, setActiveTab] = useState<'presentation' | 'style' | 'agent-prompts' | 'image-prompts' | 'content-folder'>('presentation')
   const [settings, setSettings] = useState<PresentationSettings | null>(null)
   const [loading, setLoading] = useState(true)
 
@@ -62,7 +62,7 @@ export function SettingsView() {
   return (
     <div className="h-full flex flex-col">
       <div className="p-5 border-b border-border">
-        <h3 className="text-lg font-semibold mb-1">Style & Settings</h3>
+        <h3 className="text-lg font-semibold mb-1">Settings</h3>
         <p className="text-sm text-muted-foreground">
           Manage presentation settings and view agent prompts
         </p>

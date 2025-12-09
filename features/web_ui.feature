@@ -169,6 +169,7 @@ Feature: Web UI
     Then the response status code should be 404
     And the response should contain "Presentation not found"
 
+  @wip
   Scenario: User Browses Available Templates
     Given templates "1. Alpine Minimal", "2. Editorial Modern", and "5. Midnight Grid" exist
     When I request the template list via API

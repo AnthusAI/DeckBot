@@ -8,18 +8,17 @@ from deckbot.manager import PresentationManager
 @given('I have an auto-compilation test presentation named "{name}"')
 def step_impl(context, name):
     manager = PresentationManager(root_dir=context.temp_dir)
-    # Clean up if exists
-    if os.path.exists(os.path.join(context.temp_dir, name)):
-        import shutil
-        shutil.rmtree(os.path.join(context.temp_dir, name))
-    
+
     manager.create_presentation(name, "Test description")
     context.current_presentation_name = name
-    context.presentation_dir = os.path.join(context.temp_dir, name)
-    
+
+    # Get presentation and use encoded directory name
+    presentation = manager.get_presentation(name)
+    dir_name = presentation.get('_dir_name', name)
+    context.presentation_dir = os.path.join(context.temp_dir, 'presentations', dir_name)
+
     # Initialize tools with mocked dependencies
     context.nano_client = MagicMock()
-    presentation = manager.get_presentation(name)
     context.tools = PresentationTools(presentation, context.nano_client, root_dir=context.temp_dir)
 
 @step('I use the tool "{tool_name}" to create "{filename}" with content "{content}"')

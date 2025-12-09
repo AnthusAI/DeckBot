@@ -6,3 +6,5 @@ export interface Preferences {
   color_theme?: ColorTheme
 }
 
+
+

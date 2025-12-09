@@ -207,7 +207,7 @@ export const chatAPI = {
 export const commandAPI = {
   execute: async (data: { command: string; args: string; presentation_name: string; current_slide: number }): Promise<{ status: string; content?: string; format?: string; tools?: any[] }> => {
     await ensureConfig()
-    const response = await fetch(`${API_BASE}/api/command`, {
+    const response = await fetch(`${API_BASE}/api/slash-command`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -344,3 +344,5 @@ export const secretsAPI = {
       method: 'POST',
     }),
 }
+
+

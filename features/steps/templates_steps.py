@@ -14,20 +14,35 @@ def step_impl(context):
     context.templates_dir = os.path.join(context.temp_dir, "templates")
     os.makedirs(context.templates_dir, exist_ok=True)
 
+    # Create default marp.config.js for diagram support
+    default_config_path = os.path.join(context.templates_dir, "marp.config.js")
+    if not os.path.exists(default_config_path):
+        with open(default_config_path, 'w') as f:
+            f.write("""module.exports = {
+  markdown: {
+    markdownItPlugins: [
+      ['@kazumatu981/markdown-it-kroki', {
+        entrypoint: 'https://kroki.io'
+      }]
+    ]
+  }
+};
+""")
+
 @given('there is a template "{name}" with description "{description}"')
 def step_impl(context, name, description):
     template_path = os.path.join(context.templates_dir, name)
     os.makedirs(template_path, exist_ok=True)
-    
+
     metadata = {
         "name": name,
         "description": description,
         "instructions": "Some instruction"
     }
-    
+
     with open(os.path.join(template_path, "metadata.json"), "w") as f:
         json.dump(metadata, f)
-        
+
     with open(os.path.join(template_path, "deck.marp.md"), "w") as f:
         f.write(f"# {name} Template")
 
@@ -46,8 +61,50 @@ def step_impl(context, name, content):
 def step_impl(context, name):
     template_path = os.path.join(context.templates_dir, name)
     os.makedirs(template_path, exist_ok=True)
+
+    # Special content for DiagramDemo template
+    if name == "DiagramDemo":
+        content = """---
+marp: true
+---
+
+# Diagram Examples
+
+---
+
+## Mermaid Flowchart
+
+```mermaid
+graph TD
+    A[Start] --> B{Decision}
+    B -->|Yes| C[Action]
+    B -->|No| D[End]
+    C --> D
+```
+
+---
+
+## Excalidraw Diagram
+
+```excalidraw
+{
+  "type": "excalidraw",
+  "version": 2,
+  "elements": []
+}
+```
+"""
+    else:
+        content = "# Template"
+
     with open(os.path.join(template_path, "deck.marp.md"), "w") as f:
-        f.write("# Template")
+        f.write(content)
+
+    # Copy marp.config.js if it exists in templates root
+    default_config = os.path.join(context.templates_dir, "marp.config.js")
+    if os.path.exists(default_config):
+        import shutil
+        shutil.copy2(default_config, os.path.join(template_path, "marp.config.js"))
     with open(os.path.join(template_path, "metadata.json"), "w") as f:
         json.dump({"name": name}, f)
 
@@ -76,7 +133,20 @@ def step_impl(context):
 
 @then('the file "{filepath}" should contain "{content}"')
 def step_impl(context, filepath, content):
-    full_path = os.path.join(context.temp_dir, filepath)
+    from deckbot.manager import PresentationManager
+    # filepath format is "presentation-name/filename"
+    parts = filepath.split('/', 1)
+    if len(parts) == 2:
+        pres_name, filename = parts
+        manager = PresentationManager(root_dir=context.temp_dir)
+        pres = manager.get_presentation(pres_name)
+        if pres:
+            dir_name = pres.get('_dir_name', pres_name)
+            full_path = os.path.join(context.temp_dir, 'presentations', dir_name, filename)
+        else:
+            full_path = os.path.join(context.temp_dir, filepath)
+    else:
+        full_path = os.path.join(context.temp_dir, filepath)
     with open(full_path, 'r') as f:
         file_content = f.read()
     assert content in file_content
@@ -97,20 +167,14 @@ def step_impl(context, name, template):
 @given('I create a presentation "{name}" from template "{template}"')
 def step_impl(context, name, template):
     manager = PresentationManager(root_dir=context.temp_dir)
-    
-    # Actually, let's copy the files manually to set up the state
-    dest_dir = os.path.join(context.temp_dir, name)
-    src_dir = os.path.join(context.templates_dir, template)
-    shutil.copytree(src_dir, dest_dir)
-    
-    # Ensure the metadata has the instruction
-    with open(os.path.join(src_dir, "metadata.json"), 'r') as f:
-        data = json.load(f)
-    
-    # When copying, we probably want to update the name in metadata
-    data['name'] = name
-    with open(os.path.join(dest_dir, "metadata.json"), 'w') as f:
-        json.dump(data, f)
+
+    # Use the manager to create the presentation which handles path encoding
+    manager.create_presentation(name, description="Test presentation", template=template)
+
+    # Get the presentation to verify it was created
+    pres = manager.get_presentation(name)
+    if pres is None:
+        raise Exception(f"Failed to create presentation '{name}' from template '{template}'")
 
 @when('I load the presentation "{name}"')
 def step_impl(context, name):
@@ -160,7 +224,12 @@ def step_impl(context, template):
 
 @then('a presentation "{name}" should exist')
 def step_impl(context, name):
-    path = os.path.join(context.temp_dir, name)
+    from deckbot.manager import PresentationManager
+    manager = PresentationManager(root_dir=context.temp_dir)
+    pres = manager.get_presentation(name)
+    assert pres is not None, f"Presentation '{name}' not found"
+    dir_name = pres.get('_dir_name', name)
+    path = os.path.join(context.temp_dir, 'presentations', dir_name)
     assert os.path.exists(path), f"Presentation directory {path} does not exist"
     assert os.path.isdir(path), f"{path} is not a directory"
     assert os.path.exists(os.path.join(path, "metadata.json")), f"metadata.json missing in {path}"
@@ -188,7 +257,20 @@ def step_impl(context, name, image_name):
 
 @then('the file "{filepath}" should exist')
 def step_impl(context, filepath):
-    path = os.path.join(context.temp_dir, filepath)
+    from deckbot.manager import PresentationManager
+    # filepath format is "presentation-name/filename"
+    parts = filepath.split('/', 1)
+    if len(parts) == 2:
+        pres_name, filename = parts
+        manager = PresentationManager(root_dir=context.temp_dir)
+        pres = manager.get_presentation(pres_name)
+        if pres:
+            dir_name = pres.get('_dir_name', pres_name)
+            path = os.path.join(context.temp_dir, 'presentations', dir_name, filename)
+        else:
+            path = os.path.join(context.temp_dir, filepath)
+    else:
+        path = os.path.join(context.temp_dir, filepath)
     assert os.path.exists(path), f"File {path} does not exist"
 
 @when('I create a presentation "{name}" without a template')

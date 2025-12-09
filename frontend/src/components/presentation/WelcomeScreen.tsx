@@ -5,10 +5,17 @@ import { useAppStore } from '@/store/useAppStore'
 import { useChatStore } from '@/store/useChatStore'
 import { presentationsAPI, templatesAPI } from '@/services/api'
 import { Button } from '@/components/ui/button'
+import { ThemedLogo } from '@/components/ui/ThemedLogo'
+import { LogoStripe } from '@/components/ui/LogoStripe'
 import { CreatePresentationModal } from './CreatePresentationModal'
 import type { Presentation as PresentationType, Template } from '@/types/Presentation'
 
-export function WelcomeScreen() {
+interface WelcomeScreenProps {
+  onOpenPresentation?: (name: string) => void
+  electronMode?: boolean
+}
+
+export function WelcomeScreen({ onOpenPresentation, electronMode = false }: WelcomeScreenProps = {}) {
   const [activeTab, setActiveTab] = useState<'presentations' | 'templates'>('presentations')
   const { presentations, templates, setPresentations, setTemplates, removePresentation } = usePresentationStore()
   const { setCurrentPresentation, setShowWelcomeScreen } = useAppStore()
@@ -38,14 +45,20 @@ export function WelcomeScreen() {
   }
 
   const handleOpenPresentation = async (name: string) => {
-    try {
-      const result = await presentationsAPI.load(name)
-      setCurrentPresentation(result.presentation)
-      setMessages(result.history || [])
-      setShowWelcomeScreen(false)
-    } catch (error) {
-      console.error('Error loading presentation:', error)
-      alert('Failed to load presentation')
+    if (onOpenPresentation) {
+      // Use router navigation (works in both modes now)
+      onOpenPresentation(name)
+    } else {
+      // Fallback to store-based navigation (legacy)
+      try {
+        const result = await presentationsAPI.load(name)
+        setCurrentPresentation(result.presentation)
+        setMessages(result.history || [])
+        setShowWelcomeScreen(false)
+      } catch (error) {
+        console.error('Error loading presentation:', error)
+        alert('Failed to load presentation')
+      }
     }
   }
 
@@ -75,22 +88,36 @@ export function WelcomeScreen() {
 
   return (
     <>
-      <div className="fixed inset-0 top-10 bg-background z-10 flex flex-col">
-        <div className="border-b border-border bg-background p-10 pb-0">
-          <div className="flex gap-2">
+      <div className={`fixed inset-0 ${electronMode ? 'top-0' : 'top-10'} bg-background z-10 flex flex-col`}>
+        <div className="border-b border-border relative" style={{ backgroundColor: 'transparent' }}>
+          <LogoStripe />
+          <div className="absolute top-0 left-0 right-0 h-32 flex items-center justify-end pl-10" style={{ zIndex: 2 }}>
+            <div className="text-right mr-3 self-start" style={{ marginTop: '0.25rem' }}>
+              <h1 className="text-5xl font-normal" style={{ fontFamily: "'Jersey 10', sans-serif", letterSpacing: '0.02em', lineHeight: '1', marginBottom: '0.125rem' }}>
+                DeckBot
+              </h1>
+              <p className="text-sm text-muted-foreground" style={{ lineHeight: '1.2' }}>
+                An AI assistant for managing your slide presentation decks as code
+              </p>
+            </div>
+            <ThemedLogo className="h-32 w-auto flex-shrink-0" style={{ display: 'block' }} />
+          </div>
+          <div className="flex gap-2 px-10 relative z-10" style={{ paddingTop: '80px' }}>
             <button
-              className={activeTab === 'presentations' 
-                ? 'flex items-center gap-2 px-5 py-3 border-b-2 border-primary text-primary font-medium transition-colors' 
+              className={activeTab === 'presentations'
+                ? 'flex items-center gap-2 px-5 py-3 border-b-2 text-primary font-medium transition-colors'
                 : 'flex items-center gap-2 px-5 py-3 border-b-2 border-transparent text-muted-foreground hover:text-foreground transition-colors'}
+              style={activeTab === 'presentations' ? { borderBottomColor: 'hsl(var(--primary))' } : {}}
               onClick={() => setActiveTab('presentations')}
             >
               <Presentation className="w-4 h-4" />
               Presentations
             </button>
             <button
-              className={activeTab === 'templates' 
-                ? 'flex items-center gap-2 px-5 py-3 border-b-2 border-primary text-primary font-medium transition-colors' 
+              className={activeTab === 'templates'
+                ? 'flex items-center gap-2 px-5 py-3 border-b-2 text-primary font-medium transition-colors'
                 : 'flex items-center gap-2 px-5 py-3 border-b-2 border-transparent text-muted-foreground hover:text-foreground transition-colors'}
+              style={activeTab === 'templates' ? { borderBottomColor: 'hsl(var(--primary))' } : {}}
               onClick={() => setActiveTab('templates')}
             >
               <Presentation className="w-4 h-4" />
@@ -110,16 +137,23 @@ export function WelcomeScreen() {
                     type="create"
                     onCreateClick={() => setShowCreateModal(true)}
                   />
-                  {presentations.map((pres) => (
-                    <PresentationCard
-                      key={pres.name}
-                      type="presentation"
-                      presentation={pres}
-                      onOpen={() => handleOpenPresentation(pres.name)}
-                      onDelete={(e) => handleDeletePresentation(pres.name, e)}
-                      formatDate={formatDate}
-                    />
-                  ))}
+                  {[...presentations]
+                    .sort((a, b) => {
+                      // Sort by updated_at (when presentation was last modified) in reverse chronological order (newest first)
+                      const dateA = new Date(a.updated_at || a.created_at || 0).getTime()
+                      const dateB = new Date(b.updated_at || b.created_at || 0).getTime()
+                      return dateB - dateA
+                    })
+                    .map((pres) => (
+                      <PresentationCard
+                        key={pres.name}
+                        type="presentation"
+                        presentation={pres}
+                        onOpen={() => handleOpenPresentation(pres.name)}
+                        onDelete={(e) => handleDeletePresentation(pres.name, e)}
+                        formatDate={formatDate}
+                      />
+                    ))}
                 </>
               )}
               {activeTab === 'templates' && (
@@ -249,7 +283,9 @@ function PresentationCard({ type, presentation, template, onOpen, onDelete, onCr
                 key={index}
                 src={url}
                 alt={`Slide ${index + 1}`}
-                className="h-full w-auto object-contain flex-shrink-0"
+                className={`h-full w-auto object-contain flex-shrink-0 ${
+                  index === 0 ? 'border-2 border-primary rounded' : ''
+                }`}
               />
             ))}
           </div>
@@ -299,4 +335,5 @@ function PresentationCard({ type, presentation, template, onOpen, onDelete, onCr
     </div>
   )
 }
+
 

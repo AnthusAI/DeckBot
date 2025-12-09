@@ -108,7 +108,11 @@ def step_impl(context):
 @then('the presentation "{name}" should have an "images" folder')
 def step_impl(context, name):
     """Verify images folder exists."""
-    images_path = os.path.join(context.temp_dir, name, "images")
+    from deckbot.manager import PresentationManager
+    manager = PresentationManager(root_dir=context.temp_dir)
+    pres = manager.get_presentation(name)
+    dir_name = pres.get('_dir_name', name)
+    images_path = os.path.join(context.temp_dir, 'presentations', dir_name, "images")
     assert os.path.exists(images_path), f"Images folder not found at {images_path}"
     assert os.path.isdir(images_path), f"{images_path} is not a directory"
 
@@ -116,41 +120,45 @@ def step_impl(context, name):
 @then('the "images" folder should contain "{filename}"')
 def step_impl(context, filename):
     """Verify a specific file exists in images folder."""
-    # Get the most recent presentation name from context
-    pres_dirs = [d for d in os.listdir(context.temp_dir) 
-                 if os.path.isdir(os.path.join(context.temp_dir, d)) and d != "templates"]
-    pres_name = pres_dirs[-1] if pres_dirs else None
-    
-    assert pres_name, "No presentation directory found"
-    
-    file_path = os.path.join(context.temp_dir, pres_name, "images", filename)
+    from deckbot.manager import PresentationManager
+    manager = PresentationManager(root_dir=context.temp_dir)
+    # Get the most recent presentation from list
+    presentations = manager.list_presentations()
+    assert presentations, "No presentations found"
+    pres = presentations[-1]  # Most recent
+    dir_name = pres.get('_dir_name', pres['name'])
+
+    file_path = os.path.join(context.temp_dir, 'presentations', dir_name, "images", filename)
     assert os.path.exists(file_path), f"File {filename} not found in images folder at {file_path}"
 
 
 @then('the "images" folder should NOT contain "{filename}"')
 def step_impl(context, filename):
     """Verify a specific file does NOT exist in images folder."""
-    # Get the most recent presentation name from context
-    pres_dirs = [d for d in os.listdir(context.temp_dir) 
-                 if os.path.isdir(os.path.join(context.temp_dir, d)) and d != "templates"]
-    pres_name = pres_dirs[-1] if pres_dirs else None
-    
-    assert pres_name, "No presentation directory found"
-    
-    file_path = os.path.join(context.temp_dir, pres_name, "images", filename)
+    from deckbot.manager import PresentationManager
+    manager = PresentationManager(root_dir=context.temp_dir)
+    # Get the most recent presentation from list
+    presentations = manager.list_presentations()
+    assert presentations, "No presentations found"
+    pres = presentations[-1]  # Most recent
+    dir_name = pres.get('_dir_name', pres['name'])
+
+    file_path = os.path.join(context.temp_dir, 'presentations', dir_name, "images", filename)
     assert not os.path.exists(file_path), f"File {filename} should not exist but was found at {file_path}"
 
 
 @when('I read the "layouts.md" file')
 def step_impl(context):
     """Read the layouts.md file from the most recent presentation."""
-    pres_dirs = [d for d in os.listdir(context.temp_dir) 
-                 if os.path.isdir(os.path.join(context.temp_dir, d)) and d != "templates"]
-    pres_name = pres_dirs[-1] if pres_dirs else None
-    
-    assert pres_name, "No presentation directory found"
-    
-    layouts_path = os.path.join(context.temp_dir, pres_name, "layouts.md")
+    from deckbot.manager import PresentationManager
+    manager = PresentationManager(root_dir=context.temp_dir)
+    # Get the most recent presentation from list
+    presentations = manager.list_presentations()
+    assert presentations, "No presentations found"
+    pres = presentations[-1]  # Most recent
+    dir_name = pres.get('_dir_name', pres['name'])
+
+    layouts_path = os.path.join(context.temp_dir, 'presentations', dir_name, "layouts.md")
     with open(layouts_path, 'r') as f:
         context.layouts_content = f.read()
 
@@ -218,16 +226,20 @@ def step_impl(context, filename, ratio):
 def step_impl(context):
     """Query the agent about available images."""
     # The agent would list files in the images directory
-    pres_dirs = [d for d in os.listdir(context.temp_dir) 
-                 if os.path.isdir(os.path.join(context.temp_dir, d)) and d != "templates"]
-    pres_name = pres_dirs[-1] if pres_dirs else None
-    
-    if pres_name:
-        images_dir = os.path.join(context.temp_dir, pres_name, "images")
+    from deckbot.manager import PresentationManager
+    manager = PresentationManager(root_dir=context.temp_dir)
+    presentations = manager.list_presentations()
+
+    if presentations:
+        pres = presentations[-1]  # Most recent
+        dir_name = pres.get('_dir_name', pres['name'])
+        images_dir = os.path.join(context.temp_dir, 'presentations', dir_name, "images")
         if os.path.exists(images_dir):
             context.available_images = os.listdir(images_dir)
         else:
             context.available_images = []
+    else:
+        context.available_images = []
 
 
 @then('the agent should mention "{filename}"')

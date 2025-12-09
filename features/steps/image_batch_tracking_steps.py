@@ -149,9 +149,13 @@ def step_impl(context, slug1, slug2):
 
 @given('the chat history contains "{message}"')
 def step_impl(context, message):
-    pres_dir = os.path.join(context.temp_dir, "ignore-old-test")
+    from deckbot.manager import PresentationManager
+    manager = PresentationManager(root_dir=context.temp_dir)
+    pres = manager.get_presentation("ignore-old-test")
+    dir_name = pres.get('_dir_name', "ignore-old-test")
+    pres_dir = os.path.join(context.temp_dir, 'presentations', dir_name)
     history_file = os.path.join(pres_dir, "chat_history.jsonl")
-    
+
     with open(history_file, 'a') as f:
         f.write(json.dumps({"role": "user", "content": message}) + "\n")
 
@@ -173,22 +177,30 @@ def step_impl(context, slug):
 
 @given('images were generated with batch slug "{slug}"')
 def step_impl(context, slug):
-    pres_dir = os.path.join(context.temp_dir, "persist-test")
+    from deckbot.manager import PresentationManager
+    manager = PresentationManager(root_dir=context.temp_dir)
+    pres = manager.get_presentation("persist-test")
+    dir_name = pres.get('_dir_name', "persist-test")
+    pres_dir = os.path.join(context.temp_dir, 'presentations', dir_name)
     batch_dir = os.path.join(pres_dir, "drafts", slug)
     os.makedirs(batch_dir, exist_ok=True)
-    
+
     # Create 4 dummy images
     for i in range(4):
         img_path = os.path.join(batch_dir, f"candidate_{i+1}.png")
         import PIL.Image
         img = PIL.Image.new('RGB', (1, 1))
         img.save(img_path)
-    
+
     context.expected_batch_slug = slug
 
 @when('I list the drafts folder')
 def step_impl(context):
-    pres_dir = os.path.join(context.temp_dir, "persist-test")
+    from deckbot.manager import PresentationManager
+    manager = PresentationManager(root_dir=context.temp_dir)
+    pres = manager.get_presentation("persist-test")
+    dir_name = pres.get('_dir_name', "persist-test")
+    pres_dir = os.path.join(context.temp_dir, 'presentations', dir_name)
     drafts_dir = os.path.join(pres_dir, "drafts")
     context.drafts_contents = os.listdir(drafts_dir) if os.path.exists(drafts_dir) else []
 
@@ -198,7 +210,11 @@ def step_impl(context, slug):
 
 @then('the folder should contain {count:d} candidate images')
 def step_impl(context, count):
-    pres_dir = os.path.join(context.temp_dir, "persist-test")
+    from deckbot.manager import PresentationManager
+    manager = PresentationManager(root_dir=context.temp_dir)
+    pres = manager.get_presentation("persist-test")
+    dir_name = pres.get('_dir_name', "persist-test")
+    pres_dir = os.path.join(context.temp_dir, 'presentations', dir_name)
     batch_dir = os.path.join(pres_dir, "drafts", context.expected_batch_slug)
     files = os.listdir(batch_dir)
     png_files = [f for f in files if f.endswith('.png')]

@@ -58,6 +58,7 @@ debug_*.py
 # Backup and temporary files
 *.bak
 *.tmp
+tmp/
 
 # Electron build artifacts
 electron/resources/python/

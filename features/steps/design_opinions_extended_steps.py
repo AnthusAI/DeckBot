@@ -10,17 +10,19 @@ def step_impl(context, name):
     # Ensure presentation exists
     if not manager.get_presentation(name):
         manager.create_presentation(name)
-        
-    metadata_path = os.path.join(context.temp_dir, name, "metadata.json")
+
+    pres = manager.get_presentation(name)
+    dir_name = pres.get('_dir_name', name)
+    metadata_path = os.path.join(context.temp_dir, 'presentations', dir_name, "metadata.json")
     with open(metadata_path, 'r') as f:
         data = json.load(f)
-    
+
     opinions = {}
     for row in context.table:
         opinions[row['key']] = row['value']
-        
+
     data['design_opinions'] = opinions
-    
+
     with open(metadata_path, 'w') as f:
         json.dump(data, f)
 

@@ -32,20 +32,13 @@ class PresentationTools:
         # Hook for tool call events (start, end, error)
         self.tool_listeners = []
         
-        # Resolve presentation root
-        if root_dir:
-            root = root_dir
-        else:
-            env_root = os.environ.get('VIBE_PRESENTATION_ROOT')
-            if env_root:
-                root = env_root
-            elif os.path.exists("presentations"):
-                root = os.path.abspath("presentations")
-            else:
-                root = os.path.expanduser("~/.vibe_presentation")
-        
-        self.presentation_dir = os.path.join(root, presentation_context['name'])
-        self.manager = PresentationManager(root_dir=root)
+        # Create manager first (it will use preferences to find root_dir)
+        self.manager = PresentationManager(root_dir=root_dir)
+
+        # Use manager's presentations_dir for presentation directory
+        # Use _dir_name if available (encoded name), otherwise use name
+        dir_name = presentation_context.get('_dir_name', presentation_context['name'])
+        self.presentation_dir = os.path.join(self.manager.presentations_dir, dir_name)
 
     def _try_auto_compile(self):
         """Automatically recompile the presentation and return status string."""

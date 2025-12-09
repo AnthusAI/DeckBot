@@ -99,3 +99,26 @@ allowed_tags = [
 ]
 minor_tags = ["feat"]
 patch_tags = ["fix", "perf"]
+
+[tool.pytest.ini_options]
+# Exclude Electron bundled dependencies and other non-project directories
+norecursedirs = [
+    "electron",
+    "node_modules",
+    ".git",
+    ".venv",
+    "venv",
+    "env",
+    "build",
+    "dist",
+    "*.egg-info",
+]
+# Only collect tests from these directories
+testpaths = [
+    "tests",
+    "src",
+]
+# Exclude test files from bundled dependencies
+python_files = ["test_*.py", "*_test.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]

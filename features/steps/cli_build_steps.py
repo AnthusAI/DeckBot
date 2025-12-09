@@ -20,9 +20,11 @@ def step_impl(context):
     presentations = manager.list_presentations()
     if not presentations:
         raise Exception("No presentation found to add marp file to")
-    
-    pres_name = presentations[0]['name']
-    pres_dir = os.path.join(context.temp_dir, pres_name)
+
+    pres = presentations[0]
+    pres_name = pres['name']
+    dir_name = pres.get('_dir_name', pres_name)
+    pres_dir = os.path.join(context.temp_dir, 'presentations', dir_name)
     marp_file = os.path.join(pres_dir, "deck.marp.md")
     
     if not os.path.exists(marp_file):
@@ -111,8 +113,13 @@ def step_impl(context):
 
 @then('a file named "{filename}" should exist in the "{presentation_name}" presentation folder')
 def step_impl(context, filename, presentation_name):
-    filepath = os.path.join(context.temp_dir, presentation_name, filename)
-    assert os.path.exists(filepath), f"File {filepath} does not exist. Directory contents: {os.listdir(os.path.dirname(filepath))}"
+    manager = PresentationManager(root_dir=context.temp_dir)
+    pres = manager.get_presentation(presentation_name)
+    dir_name = pres.get('_dir_name', presentation_name)
+    filepath = os.path.join(context.temp_dir, 'presentations', dir_name, filename)
+    assert os.path.exists(filepath), f"File {filepath} does not exist. Directory contents: {os.listdir(os.path.dirname(filepath)) if os.path.exists(os.path.dirname(filepath)) else 'Directory does not exist'}"
+
+
 
 
 

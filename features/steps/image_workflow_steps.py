@@ -61,8 +61,12 @@ def step_impl(context):
 def step_impl(context):
     ensure_service(context)
     # Add an old SYSTEM message to history
+    from deckbot.manager import PresentationManager
     pres_name = context.service.agent.context['name']
-    history_file = os.path.join(context.temp_dir, pres_name, "chat_history.jsonl")
+    manager = PresentationManager(root_dir=context.temp_dir)
+    pres = manager.get_presentation(pres_name)
+    dir_name = pres.get('_dir_name', pres_name)
+    history_file = os.path.join(context.temp_dir, 'presentations', dir_name, "chat_history.jsonl")
     
     old_message = {
         "role": "user",

@@ -1,9 +1,8 @@
 import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { X } from 'lucide-react'
 import { usePresentationStore } from '@/store/usePresentationStore'
 import { presentationsAPI, templatesAPI } from '@/services/api'
-import { useAppStore } from '@/store/useAppStore'
-import { useChatStore } from '@/store/useChatStore'
 import { Button } from '@/components/ui/button'
 
 interface CreatePresentationModalProps {
@@ -13,13 +12,12 @@ interface CreatePresentationModalProps {
 }
 
 export function CreatePresentationModal({ open, onClose, initialTemplate }: CreatePresentationModalProps) {
+  const navigate = useNavigate()
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [selectedTemplate, setSelectedTemplate] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const { templates, setTemplates } = usePresentationStore()
-  const { setCurrentPresentation, setShowWelcomeScreen } = useAppStore()
-  const { setMessages } = useChatStore()
 
   useEffect(() => {
     if (open) {
@@ -56,11 +54,9 @@ export function CreatePresentationModal({ open, onClose, initialTemplate }: Crea
         template: selectedTemplate || undefined,
       })
       
-      const result = await presentationsAPI.load(name.trim())
-      setCurrentPresentation(result.presentation)
-      setMessages(result.history || [])
-      setShowWelcomeScreen(false)
+      // Navigate to the new presentation
       onClose()
+      navigate(`/presentation/${encodeURIComponent(name.trim())}`)
     } catch (error: any) {
       alert(error.message || 'Failed to create presentation')
     } finally {
@@ -127,4 +123,5 @@ export function CreatePresentationModal({ open, onClose, initialTemplate }: Crea
     </div>
   )
 }
+
 

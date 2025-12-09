@@ -32,6 +32,18 @@ interface AppState {
   fastMode: boolean
   setFastMode: (enabled: boolean) => void
   toggleFastMode: () => void
+
+  // Mermaid editor state
+  editingMermaid: boolean
+  mermaidCode: string | null
+  mermaidBlockIndex: number | null
+  setEditingMermaid: (editing: boolean, code?: string, blockIndex?: number) => void
+
+  // Excalidraw editor state
+  editingExcalidraw: boolean
+  excalidrawJson: string | null
+  excalidrawBlockIndex: number | null
+  setEditingExcalidraw: (editing: boolean, json?: string, blockIndex?: number) => void
 }
 
 export const useAppStore = create<AppState>()(
@@ -57,6 +69,16 @@ export const useAppStore = create<AppState>()(
       // Fast mode
       fastMode: false,
 
+      // Mermaid editor
+      editingMermaid: false,
+      mermaidCode: null,
+      mermaidBlockIndex: null,
+
+      // Excalidraw editor
+      editingExcalidraw: false,
+      excalidrawJson: null,
+      excalidrawBlockIndex: null,
+
       // Actions
       setTheme: (theme) => {
         set({ theme })
@@ -76,18 +98,15 @@ export const useAppStore = create<AppState>()(
       setCurrentPresentation: (presentation) => {
         set({ currentPresentation: presentation })
         if (presentation) {
-          localStorage.setItem('deckbot_current_presentation', presentation.name)
           console.log(`Opened presentation: ${presentation.name}`)
           set({ showWelcomeScreen: false, activeView: 'preview' })
         } else {
-          localStorage.removeItem('deckbot_current_presentation')
           set({ showWelcomeScreen: true })
         }
       },
 
       setCurrentSlide: (slide) => {
         set({ currentSlide: slide })
-        localStorage.setItem('deckbot_current_slide', String(slide))
       },
       
       setPreferences: (prefs) => set((state) => ({
@@ -101,13 +120,24 @@ export const useAppStore = create<AppState>()(
       setFastMode: (enabled) => set({ fastMode: enabled }),
 
       toggleFastMode: () => set((state) => ({ fastMode: !state.fastMode })),
+
+      setEditingMermaid: (editing, code, blockIndex) => set({
+        editingMermaid: editing,
+        mermaidCode: code ?? null,
+        mermaidBlockIndex: blockIndex ?? null,
+      }),
+
+      setEditingExcalidraw: (editing, json, blockIndex) => set({
+        editingExcalidraw: editing,
+        excalidrawJson: json ?? null,
+        excalidrawBlockIndex: blockIndex ?? null,
+      }),
     }),
     {
       name: 'deckbot-app-storage',
       partialize: (state) => ({
         theme: state.theme,
         colorTheme: state.colorTheme,
-        currentSlide: state.currentSlide,
         preferences: state.preferences,
         activeView: state.activeView,
         fastMode: state.fastMode,
@@ -115,4 +145,5 @@ export const useAppStore = create<AppState>()(
     }
   )
 )
+
 

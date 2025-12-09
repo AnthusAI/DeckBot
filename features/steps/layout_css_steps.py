@@ -119,7 +119,10 @@ def step_impl(context):
 @when('I modify the layouts.md CSS')
 def step_impl(context):
     """Modify layouts CSS."""
-    layouts_path = os.path.join(context.temp_dir, context.current_presentation, "layouts.md")
+    manager = PresentationManager(root_dir=context.temp_dir)
+    pres = manager.get_presentation(context.current_presentation)
+    dir_name = pres.get('_dir_name', context.current_presentation)
+    layouts_path = os.path.join(context.temp_dir, 'presentations', dir_name, "layouts.md")
     with open(layouts_path, "r") as f:
         content = f.read()
     # Add new CSS
@@ -132,7 +135,10 @@ def step_impl(context):
 @when('I request to update the deck styles')
 def step_impl(context):
     """Update deck styles."""
-    pres_dir = os.path.join(context.temp_dir, context.current_presentation)
+    manager = PresentationManager(root_dir=context.temp_dir)
+    pres = manager.get_presentation(context.current_presentation)
+    dir_name = pres.get('_dir_name', context.current_presentation)
+    pres_dir = os.path.join(context.temp_dir, 'presentations', dir_name)
     layouts_path = os.path.join(pres_dir, "layouts.md")
     context.manager._merge_layouts_css(pres_dir, layouts_path)
 
@@ -140,7 +146,10 @@ def step_impl(context):
 @then('the presentation "{name}" should have a "deck.marp.md" file')
 def step_impl(context, name):
     """Check deck.marp.md exists."""
-    deck_path = os.path.join(context.temp_dir, name, "deck.marp.md")
+    manager = PresentationManager(root_dir=context.temp_dir)
+    pres = manager.get_presentation(name)
+    dir_name = pres.get('_dir_name', name)
+    deck_path = os.path.join(context.temp_dir, 'presentations', dir_name, "deck.marp.md")
     assert os.path.exists(deck_path), f"deck.marp.md not found in {name}"
     context.deck_path = deck_path
 
@@ -150,7 +159,10 @@ def step_impl(context):
     """Check deck has layout CSS."""
     # Set deck_path if not already set
     if not hasattr(context, 'deck_path'):
-        pres_dir = os.path.join(context.temp_dir, context.current_presentation)
+        manager = PresentationManager(root_dir=context.temp_dir)
+        pres = manager.get_presentation(context.current_presentation)
+        dir_name = pres.get('_dir_name', context.current_presentation)
+        pres_dir = os.path.join(context.temp_dir, 'presentations', dir_name)
         context.deck_path = os.path.join(pres_dir, "deck.marp.md")
     
     with open(context.deck_path, "r") as f:
@@ -164,7 +176,10 @@ def step_impl(context, text):
     """Check deck contains text."""
     # Set deck_path if not already set
     if not hasattr(context, 'deck_path'):
-        pres_dir = os.path.join(context.temp_dir, context.current_presentation)
+        manager = PresentationManager(root_dir=context.temp_dir)
+        pres = manager.get_presentation(context.current_presentation)
+        dir_name = pres.get('_dir_name', context.current_presentation)
+        pres_dir = os.path.join(context.temp_dir, 'presentations', dir_name)
         context.deck_path = os.path.join(pres_dir, "deck.marp.md")
     
     with open(context.deck_path, "r") as f:
@@ -177,7 +192,10 @@ def step_impl(context):
     """Check deck has template CSS."""
     # Set deck_path if not already set
     if not hasattr(context, 'deck_path'):
-        pres_dir = os.path.join(context.temp_dir, context.current_presentation)
+        manager = PresentationManager(root_dir=context.temp_dir)
+        pres = manager.get_presentation(context.current_presentation)
+        dir_name = pres.get('_dir_name', context.current_presentation)
+        pres_dir = os.path.join(context.temp_dir, 'presentations', dir_name)
         context.deck_path = os.path.join(pres_dir, "deck.marp.md")
     
     with open(context.deck_path, "r") as f:
@@ -190,7 +208,10 @@ def step_impl(context):
     """Check CSS in front matter."""
     # Set deck_path if not already set
     if not hasattr(context, 'deck_path'):
-        pres_dir = os.path.join(context.temp_dir, context.current_presentation)
+        manager = PresentationManager(root_dir=context.temp_dir)
+        pres = manager.get_presentation(context.current_presentation)
+        dir_name = pres.get('_dir_name', context.current_presentation)
+        pres_dir = os.path.join(context.temp_dir, 'presentations', dir_name)
         context.deck_path = os.path.join(pres_dir, "deck.marp.md")
     
     with open(context.deck_path, "r") as f:
@@ -211,7 +232,10 @@ def step_impl(context):
     """Check deck has default CSS."""
     # Set deck_path if not already set
     if not hasattr(context, 'deck_path'):
-        pres_dir = os.path.join(context.temp_dir, context.current_presentation)
+        manager = PresentationManager(root_dir=context.temp_dir)
+        pres = manager.get_presentation(context.current_presentation)
+        dir_name = pres.get('_dir_name', context.current_presentation)
+        pres_dir = os.path.join(context.temp_dir, 'presentations', dir_name)
         context.deck_path = os.path.join(pres_dir, "deck.marp.md")
     
     with open(context.deck_path, "r") as f:
@@ -224,7 +248,10 @@ def step_impl(context):
     """Check both CSS present."""
     # Set deck_path if not already set
     if not hasattr(context, 'deck_path'):
-        pres_dir = os.path.join(context.temp_dir, context.current_presentation)
+        manager = PresentationManager(root_dir=context.temp_dir)
+        pres = manager.get_presentation(context.current_presentation)
+        dir_name = pres.get('_dir_name', context.current_presentation)
+        pres_dir = os.path.join(context.temp_dir, 'presentations', dir_name)
         context.deck_path = os.path.join(pres_dir, "deck.marp.md")
     
     with open(context.deck_path, "r") as f:
@@ -245,7 +272,10 @@ def step_impl(context):
     """Check no duplicates."""
     # Set deck_path if not already set
     if not hasattr(context, 'deck_path'):
-        pres_dir = os.path.join(context.temp_dir, context.current_presentation)
+        manager = PresentationManager(root_dir=context.temp_dir)
+        pres = manager.get_presentation(context.current_presentation)
+        dir_name = pres.get('_dir_name', context.current_presentation)
+        pres_dir = os.path.join(context.temp_dir, 'presentations', dir_name)
         context.deck_path = os.path.join(pres_dir, "deck.marp.md")
     
     with open(context.deck_path, "r") as f:
@@ -290,7 +320,10 @@ def step_impl(context):
 @then('the deck.marp.md should reflect the updated CSS')
 def step_impl(context):
     """Check CSS updated."""
-    deck_path = os.path.join(context.temp_dir, context.current_presentation, "deck.marp.md")
+    manager = PresentationManager(root_dir=context.temp_dir)
+    pres = manager.get_presentation(context.current_presentation)
+    dir_name = pres.get('_dir_name', context.current_presentation)
+    deck_path = os.path.join(context.temp_dir, 'presentations', dir_name, "deck.marp.md")
     with open(deck_path, "r") as f:
         content = f.read()
     assert ".new-layout" in content, "Updated CSS not in deck"
@@ -308,7 +341,10 @@ def step_impl(context):
     """Check comments preserved."""
     # Set deck_path if not already set
     if not hasattr(context, 'deck_path'):
-        pres_dir = os.path.join(context.temp_dir, context.current_presentation)
+        manager = PresentationManager(root_dir=context.temp_dir)
+        pres = manager.get_presentation(context.current_presentation)
+        dir_name = pres.get('_dir_name', context.current_presentation)
+        pres_dir = os.path.join(context.temp_dir, 'presentations', dir_name)
         context.deck_path = os.path.join(pres_dir, "deck.marp.md")
     
     with open(context.deck_path, "r") as f:

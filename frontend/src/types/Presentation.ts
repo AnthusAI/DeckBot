@@ -5,6 +5,7 @@ export interface Presentation {
   slide_count?: number
   last_modified?: string
   created_at?: string
+  updated_at?: string
   color_settings?: ColorSettings
   font_settings?: FontSettings
   image_style?: ImageStyle
@@ -46,4 +47,5 @@ export interface PresentationSettings {
   color_settings: ColorSettings
   font_settings: FontSettings
 }
+
 

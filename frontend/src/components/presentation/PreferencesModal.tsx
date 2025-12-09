@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { X, Sun, Palette, Key } from 'lucide-react'
+import { X, Sun, Palette, Key, Folder } from 'lucide-react'
 import { useAppStore } from '@/store/useAppStore'
 import { preferencesAPI } from '@/services/api'
 import { Button } from '@/components/ui/button'
@@ -12,7 +12,7 @@ interface PreferencesModalProps {
   onClose: () => void
 }
 
-type Tab = 'general' | 'api-keys'
+type Tab = 'general' | 'api-keys' | 'content-folder'
 
 export function PreferencesModal({ open, onClose }: PreferencesModalProps) {
   const { theme, colorTheme, setTheme, setColorTheme } = useAppStore()
@@ -80,6 +80,18 @@ export function PreferencesModal({ open, onClose }: PreferencesModalProps) {
             >
               <Key className="w-4 h-4" />
               API Keys
+            </button>
+            <button
+              onClick={() => setActiveTab('content-folder')}
+              className={cn(
+                'pb-2 px-1 border-b-2 transition-colors flex items-center gap-2',
+                activeTab === 'content-folder'
+                  ? 'border-primary text-foreground'
+                  : 'border-transparent text-muted-foreground hover:text-foreground'
+              )}
+            >
+              <Folder className="w-4 h-4" />
+              Content Folder
             </button>
           </div>
         </div>
@@ -173,6 +185,10 @@ export function PreferencesModal({ open, onClose }: PreferencesModalProps) {
         {activeTab === 'api-keys' && (
           <APIKeysTab />
         )}
+
+        {activeTab === 'content-folder' && (
+          <ContentFolderTab />
+        )}
         </div>
 
         {/* Footer - only show for General tab */}
@@ -190,4 +206,209 @@ export function PreferencesModal({ open, onClose }: PreferencesModalProps) {
     </div>
   )
 }
+
+function ContentFolderTab() {
+  const [folderInfo, setFolderInfo] = useState<any>(null)
+  const [newPath, setNewPath] = useState('')
+  const [validationResult, setValidationResult] = useState<any>(null)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    loadFolderInfo()
+  }, [])
+
+  const loadFolderInfo = async () => {
+    try {
+      const response = await fetch('/api/content-folder')
+      const data = await response.json()
+      setFolderInfo(data)
+      setNewPath(data.content_folder)
+    } catch (error) {
+      setError('Failed to load content folder information')
+    }
+  }
+
+  const validatePath = async (path: string) => {
+    if (!path.trim()) {
+      setValidationResult(null)
+      return
+    }
+
+    try {
+      const response = await fetch('/api/content-folder/validate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path })
+      })
+      const result = await response.json()
+      setValidationResult(result)
+    } catch (error) {
+      console.error('Validation error:', error)
+    }
+  }
+
+  const handlePathChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const path = e.target.value
+    setNewPath(path)
+    setTimeout(() => validatePath(path), 500)
+  }
+
+  const handleBrowse = async () => {
+    if ((window as any).electronAPI?.showOpenDialog) {
+      try {
+        const result = await (window as any).electronAPI.showOpenDialog({
+          properties: ['openDirectory', 'createDirectory'],
+          title: 'Select Content Folder',
+          defaultPath: folderInfo?.absolute_path || '~/'
+        })
+
+        if (result && !result.canceled && result.filePaths.length > 0) {
+          const selectedPath = result.filePaths[0]
+          setNewPath(selectedPath)
+          validatePath(selectedPath)
+        }
+      } catch (error) {
+        console.error('Folder picker error:', error)
+      }
+    } else {
+      alert('Folder picker only available in Electron app')
+    }
+  }
+
+  const handleSave = async () => {
+    if (!newPath.trim()) {
+      setError('Path cannot be empty')
+      return
+    }
+
+    setSaving(true)
+    setError(null)
+
+    try {
+      const response = await fetch('/api/content-folder', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: newPath })
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Failed to update')
+      }
+
+      const result = await response.json()
+      alert(`Content folder updated to: ${result.absolute_path}`)
+      window.location.reload()
+    } catch (error: any) {
+      setError(error.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (!folderInfo) return <div className="text-center text-muted-foreground">Loading...</div>
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h4 className="font-semibold mb-2">Content Folder Location</h4>
+        <p className="text-sm text-muted-foreground mb-4">
+          Configure where DeckBot stores presentations and templates. Settings always remain in ~/.deckbot.
+        </p>
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium mb-2">Current Location</label>
+        <div className="bg-muted/30 p-3 rounded-md text-sm space-y-1">
+          <div><strong>Path:</strong> {folderInfo.content_folder}</div>
+          <div><strong>Resolved:</strong> {folderInfo.absolute_path}</div>
+          <div>
+            <strong>Status:</strong>
+            {folderInfo.exists ?
+              <span className="text-green-600 ml-2">✓ Exists</span> :
+              <span className="text-yellow-600 ml-2">⚠ Will be created</span>
+            }
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium mb-2">New Location</label>
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={newPath}
+            onChange={handlePathChange}
+            className="flex-1 px-3 py-2 bg-background border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-ring"
+            placeholder="~/.deckbot"
+          />
+          {(window as any).electronAPI?.showOpenDialog && (
+            <Button onClick={handleBrowse} variant="secondary">
+              Browse...
+            </Button>
+          )}
+        </div>
+        <p className="text-xs text-muted-foreground mt-1">
+          Use ~ for home directory
+        </p>
+      </div>
+
+      {validationResult && (
+        <div className={`p-3 rounded-md text-sm ${
+          validationResult.valid ? 'bg-green-500/10 border border-green-500/20' : 'bg-red-500/10 border border-red-500/20'
+        }`}>
+          {validationResult.valid ? (
+            <div className="space-y-1">
+              <div className="text-green-600 font-medium">✓ Valid path</div>
+              <div className="text-xs opacity-75">{validationResult.absolute_path}</div>
+              {validationResult.created && (
+                <div className="text-xs opacity-75">Note: Directory will be created</div>
+              )}
+            </div>
+          ) : (
+            <div>
+              <div className="text-red-600 font-medium">✗ Invalid</div>
+              <div className="text-xs opacity-75">{validationResult.error}</div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {error && (
+        <div className="p-3 rounded-md text-sm bg-red-500/10 border border-red-500/20 text-red-600">
+          {error}
+        </div>
+      )}
+
+      <div className="flex gap-3">
+        <Button
+          onClick={handleSave}
+          disabled={saving || !validationResult?.valid}
+        >
+          {saving ? 'Saving...' : 'Save Changes'}
+        </Button>
+        <Button
+          onClick={() => { setNewPath(folderInfo.content_folder); setValidationResult(null); }}
+          variant="secondary"
+        >
+          Reset
+        </Button>
+      </div>
+
+      <div className="border-t border-border pt-4">
+        <h5 className="font-medium mb-2 text-sm">What happens when you change this?</h5>
+        <ul className="text-sm text-muted-foreground space-y-1 list-disc list-inside">
+          <li>All future presentations and templates will be loaded from the new location</li>
+          <li>Existing content in the old location will not be moved automatically</li>
+          <li>You'll need to manually move presentations if you want to migrate them</li>
+          <li>Settings and preferences remain in ~/.deckbot</li>
+          <li>The app will reload to apply changes</li>
+        </ul>
+      </div>
+    </div>
+  )
+}
+
+
 

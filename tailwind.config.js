@@ -3,6 +3,8 @@ module.exports = {
   darkMode: ["class"],
   content: [
     './src/**/*.{html,js}',
+    './src/vibe_presentation/templates/**/*.html',
+    './src/vibe_presentation/static/**/*.{js,ts,jsx,tsx}',
   ],
   theme: {
     extend: {

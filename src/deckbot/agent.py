@@ -80,20 +80,29 @@ class Agent:
 
         # Set up history file path
         if root_dir:
-            root = root_dir
+            root = os.path.join(root_dir, 'presentations')
+        elif os.getenv('VIBE_PRESENTATION_ROOT'):
+            # Environment variable for test isolation
+            # This should already point to the correct root, need to add /presentations
+            vibe_root = os.getenv('VIBE_PRESENTATION_ROOT')
+            root = os.path.join(vibe_root, 'presentations')
         else:
-            env_root = os.environ.get('VIBE_PRESENTATION_ROOT')
-            if env_root:
-                root = env_root
-            elif os.path.exists("presentations"):
-                root = os.path.abspath("presentations")
+            # Use same logic as PresentationManager - load from preferences
+            content_folder = self.prefs.get('content_folder')
+            if content_folder:
+                root = os.path.expanduser(content_folder)
             else:
-                root = os.path.expanduser("~/.vibe_presentation")
-        
+                root = os.path.expanduser('~/.deckbot')
+
+            # Add /presentations subdirectory
+            root = os.path.join(root, 'presentations')
+
         if not os.path.exists(root):
             os.makedirs(root, exist_ok=True)
-            
-        self.presentation_dir = os.path.join(root, presentation_context['name'])
+
+        # Use directory name if available, otherwise use presentation name
+        dir_name = presentation_context.get('_dir_name', presentation_context['name'])
+        self.presentation_dir = os.path.join(root, dir_name)
         self.history_file = os.path.join(self.presentation_dir, "chat_history.jsonl")
         
         # Initialize model logic
@@ -401,6 +410,143 @@ img {{
 2. **Use CSS for styling**: borders, shadows, colors, effects
 3. **Test your sizing**: If images aren't responding to size directives, check for conflicting CSS `width` or `height` rules
 4. **Be specific**: `![w:150px](...)` is clearer than hoping CSS will size it correctly
+
+## Diagram Support
+
+DeckBot supports native diagram rendering, enabling you to create technical diagrams directly in Markdown without needing image files. Diagrams are rendered as first-class components in slides.
+
+### Supported Diagram Types
+
+DeckBot supports many diagram types including:
+
+- **Mermaid**: Flowcharts, sequence diagrams, Gantt charts, class diagrams, state diagrams, ER diagrams, and more
+- **Excalidraw**: Hand-drawn style diagrams
+- **PlantUML**: UML diagrams (class, sequence, use case, activity, component, etc.)
+- **GraphViz**: Graph layouts (dot, neato, fdp, etc.)
+- **D2**: Declarative diagramming language
+- **And many more**: BlockDiag, SeqDiag, ActDiag, NwDiag, Ditaa, Erd, and others
+
+### Using Diagrams in Slides
+
+Simply use code blocks with the appropriate language identifier:
+
+**Mermaid Example:**
+```markdown
+```mermaid
+graph TD
+    A[Start] --> B{{Decision}}
+    B -->|Yes| C[Action 1]
+    B -->|No| D[Action 2]
+    C --> E[End]
+    D --> E
+```
+```
+
+**Excalidraw Example:**
+```markdown
+```excalidraw
+{{
+  "type": "excalidraw",
+  "version": 2,
+  "elements": [...]
+}}
+```
+```
+
+**PlantUML Example:**
+```markdown
+```plantuml
+@startuml
+Alice -> Bob: Hello
+Bob -> Alice: Hi
+@enduml
+```
+```
+
+### Diagram Sizing and Layout
+
+Diagrams are automatically wrapped in containers (`.mermaid-container`, `.excalidraw-container`). You can control their size and layout using CSS:
+
+**Option 1: Slide-level class (Recommended)**
+Add a class to the slide to control all diagrams on that slide:
+
+```markdown
+<!-- _class: diagram-full-width -->
+
+# My Slide
+
+```mermaid
+graph TD
+    A --> B
+```
+```
+
+**Option 2: CSS in style block**
+Add CSS rules to control diagram sizing:
+
+```css
+/* Full-width diagram */
+section.diagram-full-width .mermaid-container,
+section.diagram-full-width .excalidraw-container {{
+  width: 100% !important;
+}}
+
+/* Large centered diagram (90% width) */
+section.diagram-large .mermaid-container,
+section.diagram-large .excalidraw-container {{
+  width: 90% !important;
+}}
+
+/* Medium diagram (70% width) */
+section.diagram-medium .mermaid-container,
+section.diagram-medium .excalidraw-container {{
+  width: 70% !important;
+}}
+
+/* Small diagram (50% width) */
+section.diagram-small .mermaid-container,
+section.diagram-small .excalidraw-container {{
+  width: 50% !important;
+}}
+```
+
+**Default behavior**: Diagrams are centered and scale to fit their container (max-width: 100%).
+
+### Editing Diagrams
+
+Users can edit Excalidraw diagrams visually using the built-in editor:
+
+**From Code View:**
+- Position cursor inside a ```excalidraw block in deck.marp.md
+- Click "Edit Diagram" button in toolbar (only enabled when cursor is in an excalidraw block)
+- Make changes in visual editor
+- Click Save to update the JSON in the markdown file
+- The presentation automatically recompiles
+
+**From Preview:**
+- Hover over any Excalidraw diagram in the preview
+- Click the edit button that appears on hover
+- Make changes in visual editor
+- Click Save to update the presentation
+- The diagram JSON is automatically updated in deck.marp.md and the presentation recompiles
+
+The diagram JSON is automatically updated in deck.marp.md and the presentation recompiles after saving.
+
+### Diagram Best Practices
+
+1. **Use Mermaid for flowcharts and sequence diagrams** - It's the most commonly used and well-supported
+2. **Use Excalidraw for hand-drawn style diagrams** - Great for informal or creative presentations
+3. **Keep diagrams simple** - Complex diagrams render better and are easier to read
+4. **Edit visually** - Hover over Mermaid or Excalidraw diagrams in preview mode to access the visual editor
+5. **Control size with CSS** - Add slide-level classes like `diagram-full-width`, `diagram-large`, etc.
+6. **Consider diagram size** - Very large diagrams may not fit well on slides; break them into multiple slides if needed
+
+### When to Use Diagrams vs Images
+
+- **Use diagrams** for: Flowcharts, architecture diagrams, sequence diagrams, UML diagrams, technical schematics
+- **Use images** (via `generate_image`) for: Photos, illustrations, branded graphics, complex visual compositions
+
+Diagrams are perfect for technical content that can be expressed textually, while images are better for visual content that requires artistic generation.
 
 ## Marp Documentation
 {marp_docs}

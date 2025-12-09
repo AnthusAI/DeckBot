@@ -40,3 +40,5 @@ Feature: Style Specification Management
     Then the file "images/style.png" should not exist in the presentation directory
 
 
+
+

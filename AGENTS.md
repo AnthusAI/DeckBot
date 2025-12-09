@@ -35,6 +35,103 @@ As an agent working on this project, you **MUST** adhere to the following cycle 
     3. If tests fail or error, FIX THEM IMMEDIATELY before doing anything else
 *   **Never assume tests pass.** Always verify. A BDD project with failing tests is a broken project.
 
+## BDD Discipline & Anti-Patterns
+
+### NEVER Do These Things:
+- **Write features without step definitions**: Every scenario must have corresponding step implementations. Running `behave --dry-run` should show 0 undefined steps. A feature file without step definitions is worthless.
+- **Use placeholder assertions**: `assert True` is not a test. If you can't test behavior, either:
+  1. Test the backend API that supports the behavior, OR
+  2. Mark the test with `@wip` and add a TODO comment explaining why
+- **Skip the RED step**: Before writing ANY code, run `behave` and verify the test fails. A test that passes immediately is not testing anything new.
+- **Commit with failing tests**: The test suite must be GREEN before committing. If you discover a bug:
+  1. Write a failing test that reproduces it
+  2. Fix the bug
+  3. Verify the test passes
+  4. Commit both together
+- **Treat bugs as one-off fixes**: Every bug represents a gap in test coverage. When you find a bug, FIRST write a test that exposes it, THEN fix it. This prevents regressions.
+
+### Test Isolation & Fixtures:
+- Use the `temporary_environment` fixture for all tests that create files
+- Never assume a specific presentation directory structure - use `context.temp_dir`
+- Clean up mocks in `after_scenario` - don't let test state leak between scenarios
+- If tests need API keys, tag them `@integration` and `@manual` - they should NOT run by default
+
+### Mocking Strategy:
+- Mock external dependencies (Google API, file system I/O outside temp_dir)
+- DON'T mock your own code - if mocking internal code is painful, your code is too coupled
+- Use `unittest.mock.patch` for external dependencies only
+- If you need complex mocks for internal code, refactor for better separation of concerns
+
+### When Tests Fail During Development:
+1. **Read the error message carefully** - Behave shows exactly what failed and where
+2. **Check if it's your test or your code** - Did you break an existing test? That's a regression.
+3. **Fix immediately** - Don't move on, don't "come back to it later", fix it NOW
+4. **Run the full suite** - `behave` - to check for cascading failures in other tests
+5. **Never skip this step** - Running tests is not optional, it's the core of BDD
+
+### The Cost of Ignoring BDD:
+When you skip writing tests or don't run them after changes, you create:
+- **Technical debt** - Every untested change is a future bug waiting to happen
+- **Broken builds** - Other developers (or future you) will find the failures
+- **Wasted time** - Debugging failures later takes 10x longer than writing tests upfront
+- **Lost trust** - A codebase with failing tests signals neglect and unreliability
+
+**Remember**: In a BDD project, tests are not an afterthought. They are the specification. Code without tests is not done.
+
+## Test Organization
+
+### Feature File Structure:
+- One feature per major user capability (e.g., "Slash Commands", "Image Generation")
+- Use descriptive scenario names that explain the user goal
+- Keep scenarios focused - test one behavior per scenario
+- Use Background for common setup across all scenarios in a feature
+
+### Step Definition Organization:
+- Group step definitions by domain (e.g., `slash_commands_steps.py`, `image_gen_steps.py`)
+- Reuse steps across features where possible - don't duplicate step definitions
+- Use `context` object to pass state between steps
+- Follow naming convention: `{domain}_steps.py`
+
+### Step Definition Patterns:
+
+**GOOD** - Reusable, clear, tests actual behavior:
+```python
+@when('I request presentations via API')
+def step_impl(context):
+    with app.test_client() as client:
+        context.response = client.get('/api/presentations')
+
+@then('the response should contain "{text}"')
+def step_impl(context, text):
+    body = context.response.get_data(as_text=True)
+    assert text in body, f"Expected '{text}' in response"
+```
+
+**BAD** - Hard-coded values, not reusable, not testing anything:
+```python
+@when('I request presentations')
+def step_impl(context):
+    context.response = "mock data"
+    assert True  # This is not a test!
+```
+
+### Running Tests Correctly:
+
+**During development** (after EVERY change):
+```bash
+behave features/your_feature.feature  # Test the feature you're working on
+```
+
+**Before committing**:
+```bash
+behave  # Run ALL tests - must show 0 failed, 0 error
+```
+
+**To check for undefined steps**:
+```bash
+behave --dry-run  # Should show 0 undefined steps
+```
+
 ## Testing Strategy
 
 ### Unit & Feature Tests (Default)
@@ -287,6 +384,79 @@ Using the provided style reference image as a visual style guide (match its styl
   "Using the provided style reference image as a visual style guide, generate: a blue circle. Style instructions: minimalist, clean"
 ]
 ```
+
+## Diagram Support
+
+DeckBot supports native, client-side diagram rendering. Diagrams are rendered as first-class components in presentations with visual editing capabilities.
+
+### Supported Diagram Types
+
+DeckBot currently supports:
+
+- **Mermaid**: Flowcharts, sequence diagrams, Gantt charts, class diagrams, state diagrams, ER diagrams
+- **Excalidraw**: Hand-drawn style diagrams
+- **PlantUML**: UML diagrams (class, sequence, use case, activity, component, etc.)
+- **GraphViz**: Graph layouts (dot, neato, fdp, etc.)
+- **D2**: Declarative diagramming language
+- **And many more**: BlockDiag, SeqDiag, ActDiag, NwDiag, Ditaa, Erd, and others
+
+### Configuration
+
+Each presentation includes a `marp.config.js` file that configures the Marp engine:
+
+```javascript
+module.exports = {
+  engine: ({ marp }) => marp,
+  html: true
+};
+```
+
+The Python backend (`webapp.py`) transforms diagram code blocks server-side and injects client-side rendering scripts (Mermaid.js) for local, offline diagram rendering.
+
+This file is automatically included when creating presentations from templates or creating new presentations.
+
+### Using Diagrams
+
+Diagrams are added to slides using code blocks with the appropriate language identifier:
+
+**Mermaid Example:**
+```markdown
+```mermaid
+graph TD
+    A[Start] --> B{Decision}
+    B -->|Yes| C[Action 1]
+    B -->|No| D[Action 2]
+```
+```
+
+**Excalidraw Example:**
+```markdown
+```excalidraw
+{
+  "type": "excalidraw",
+  "version": 2,
+  "elements": [...]
+}
+```
+```
+
+### Agent Instructions
+
+The agent is instructed to:
+- Use diagrams for technical content (flowcharts, architecture diagrams, sequence diagrams, UML)
+- Use `generate_image` for visual content (photos, illustrations, branded graphics)
+- Keep diagrams simple and test compilation
+- Consider diagram size and break complex diagrams into multiple slides if needed
+
+### Implementation Details
+
+- **Server-side transformation**: Python backend transforms `language-mermaid` and `language-excalidraw` code blocks into `.mermaid-container` and `.excalidraw-container` divs
+- **Client-side rendering**: Mermaid.js is loaded from CDN to render Mermaid diagrams in the browser
+- **Visual editing**: Hover over diagrams in preview mode to access edit buttons
+  - Mermaid: Opens split-pane editor (Monaco + live preview) 
+  - Excalidraw: Opens full visual editor
+- **Offline-capable**: No external API dependencies (Mermaid.js CDN is the only external resource)
+- Diagrams are centered by default (80% width) with customizable sizing via CSS classes
 
 ## Secrets Management & API Key Profiles
 

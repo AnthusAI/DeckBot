@@ -46,9 +46,12 @@ def step_impl_with_resume(context, name, resume_val):
         
         mock_service = MockSessionService.return_value
         mock_service.send_message.return_value = "I am an AI response."
-        
+
         # Mock get_history to return specific history if expected
-        presentation_dir = os.path.join(context.temp_dir, name)
+        # Get proper presentation directory using _dir_name from presentation metadata
+        pres = manager.get_presentation(name)
+        dir_name = pres.get('_dir_name', name) if pres else name
+        presentation_dir = os.path.join(context.temp_dir, 'presentations', dir_name)
         history_file = os.path.join(presentation_dir, "chat_history.jsonl")
         if os.path.exists(history_file):
             import json
@@ -68,7 +71,11 @@ def step_impl_with_resume(context, name, resume_val):
 
 @when('I create a file "{filename}" with content "{content}" via the agent')
 def step_impl(context, filename, content):
-    path = os.path.join(context.temp_dir, context.current_presentation_name, filename)
+    from deckbot.manager import PresentationManager
+    manager = PresentationManager(root_dir=context.temp_dir)
+    pres = manager.get_presentation(context.current_presentation_name)
+    dir_name = pres.get('_dir_name', context.current_presentation_name)
+    path = os.path.join(context.temp_dir, 'presentations', dir_name, filename)
     with open(path, 'w') as f:
         f.write(content)
 

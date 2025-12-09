@@ -328,17 +328,19 @@ class NanoBananaClient:
         self.context = presentation_context
 
         if root_dir:
-            root = root_dir
+            root = os.path.join(root_dir, 'presentations')
         else:
             env_root = os.environ.get('VIBE_PRESENTATION_ROOT')
             if env_root:
-                root = env_root
+                root = os.path.join(env_root, 'presentations')
             elif os.path.exists("presentations"):
                 root = os.path.abspath("presentations")
             else:
                 root = os.path.expanduser("~/.vibe_presentation")
 
-        self.presentation_dir = os.path.join(root, presentation_context['name'])
+        # Use _dir_name if available (encoded name), otherwise use name
+        dir_name = presentation_context.get('_dir_name', presentation_context['name'])
+        self.presentation_dir = os.path.join(root, dir_name)
         self.images_dir = os.path.join(self.presentation_dir, "images")
         # New drafts directory
         self.drafts_dir = os.path.join(self.presentation_dir, "drafts")

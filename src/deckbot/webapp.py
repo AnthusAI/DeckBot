@@ -3,7 +3,7 @@ import json
 import time
 import threading
 import yaml
-from flask import Flask, request, jsonify, Response, stream_with_context, send_file, send_from_directory
+from flask import Flask, render_template, request, jsonify, Response, stream_with_context, send_file, send_from_directory, make_response
 from flask_cors import CORS
 from deckbot.manager import PresentationManager
 from deckbot.session_service import SessionService
@@ -18,11 +18,45 @@ CORS(app)  # Enable CORS for development
 # Global service instance (single user for now)
 current_service = None
 
+# Global SSE events queue for slash commands and other non-agent events
+global_events_queue = []
+
+def send_sse_event(event_type, data):
+    """Send an SSE event that will be picked up by the /events endpoint"""
+    global global_events_queue
+    global_events_queue.append((event_type, data))
+
+def ensure_service_loaded(presentation_name=None):
+    """Ensure current_service is loaded. If presentation_name is provided, ensure it matches."""
+    global current_service
+
+    # If no presentation name provided and we have a service, use it
+    if not presentation_name and current_service:
+        return current_service
+
+    # If presentation name provided, check if current service matches
+    if presentation_name:
+        if current_service and current_service.agent.context.get('name') == presentation_name:
+            return current_service
+
+        # Load the presentation
+        manager = PresentationManager()
+        presentation = manager.get_presentation(presentation_name)
+        if not presentation:
+            return None
+        current_service = SessionService(presentation)
+        return current_service
+
+    return None
+
 # Backend API URL for frontend to use
 backend_api_url = None
 
 # Path to Vite build output (relative to this file: src/deckbot/static/dist)
 VITE_DIST_PATH = os.path.join(os.path.dirname(__file__), 'static', 'dist')
+# Path to marp.config.js in project root (where node_modules is)
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..'))
+MARP_CONFIG_PATH = os.path.join(PROJECT_ROOT, 'marp.config.js')
 
 def set_backend_url(port):
     """Set the backend API URL based on the port"""
@@ -58,10 +92,15 @@ def index():
         ''', 200
     else:
         # Production: serve index.html from Vite build
+        from flask import make_response, send_file
         index_path = os.path.join(VITE_DIST_PATH, 'index.html')
         if os.path.exists(index_path):
-            with open(index_path, 'r') as f:
-                return f.read()
+            # Use send_file with cache control headers
+            response = send_file(index_path, mimetype='text/html')
+            response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate, max-age=0'
+            response.headers['Pragma'] = 'no-cache'
+            response.headers['Expires'] = '0'
+            return response
         else:
             return "Vite build not found. Run 'cd frontend && npm run build' first.", 404
 
@@ -102,7 +141,115 @@ def preview_presentation():
         html_content
     )
     
-    return html_content
+    # Transform mermaid code blocks to mermaid containers (server-side)
+    # Match: <pre ...><code class="language-mermaid">...</code></pre>
+    def transform_mermaid(match):
+        code_content = match.group(1)
+        # Decode HTML entities
+        code_content = code_content.replace('&lt;', '<').replace('&gt;', '>').replace('&amp;', '&').replace('&quot;', '"').replace('&#39;', "'")
+        return f'<div class="mermaid-container" style="width: 80%; margin: 20px auto; text-align: center; position: relative;"><pre class="mermaid">{code_content}</pre></div>'
+    
+    # Count transformations for debugging
+    mermaid_count = len(re.findall(r'<code class="language-mermaid">', html_content))
+    print(f"[DeckBot] Found {mermaid_count} mermaid code blocks to transform")
+    
+    html_content = re.sub(
+        r'<pre[^>]*?><code class="language-mermaid">(.*?)</code></pre>',
+        transform_mermaid,
+        html_content,
+        flags=re.DOTALL
+    )
+    
+    # Transform excalidraw code blocks to excalidraw containers (server-side)
+    def transform_excalidraw(match):
+        code_content = match.group(1)
+        # Decode HTML entities for data attribute
+        decoded = code_content.replace('&lt;', '<').replace('&gt;', '>').replace('&amp;', '&').replace('&quot;', '"').replace('&#39;', "'")
+        # Escape for HTML attribute
+        escaped = decoded.replace("'", "&#39;")
+        return f'''<div class="excalidraw-container" style="width: 80%; margin: 20px auto; text-align: center; position: relative;" data-excalidraw='{escaped}'>
+            <div style="background: #f5f5f5; padding: 40px; border-radius: 8px; text-align: center; color: #666;">Excalidraw Diagram</div>
+        </div>'''
+    
+    excalidraw_count = len(re.findall(r'<code class="language-excalidraw">', html_content))
+    print(f"[DeckBot] Found {excalidraw_count} excalidraw code blocks to transform")
+    
+    html_content = re.sub(
+        r'<pre[^>]*?><code class="language-excalidraw">(.*?)</code></pre>',
+        transform_excalidraw,
+        html_content,
+        flags=re.DOTALL
+    )
+
+    # Inject Mermaid and Excalidraw rendering scripts before </body>
+    rendering_scripts = '''<script type="module">
+console.log('[DeckBot] Initializing diagram rendering');
+import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+
+window.addEventListener('load', async () => {
+  // Render Mermaid diagrams
+  const mermaidContainers = document.querySelectorAll('.mermaid-container');
+  console.log('[DeckBot] Found', mermaidContainers.length, 'mermaid containers');
+  
+  if (mermaidContainers.length > 0) {
+    mermaid.initialize({ 
+      startOnLoad: false,
+      theme: 'default',
+      securityLevel: 'loose'
+    });
+    mermaid.run().then(() => {
+      console.log('[DeckBot] Mermaid rendering complete');
+    });
+  }
+  
+  // Render Excalidraw diagrams using the library
+  const excalidrawContainers = document.querySelectorAll('.excalidraw-container');
+  console.log('[DeckBot] Found', excalidrawContainers.length, 'excalidraw containers');
+  
+  if (excalidrawContainers.length > 0) {
+    // Load Excalidraw library
+    const { exportToSvg } = await import('https://esm.sh/@excalidraw/excalidraw@0.18.0');
+    
+    for (const container of excalidrawContainers) {
+      const json = container.getAttribute('data-excalidraw');
+      if (json) {
+        try {
+          const data = JSON.parse(json);
+          console.log('[DeckBot] Rendering Excalidraw with', data.elements?.length || 0, 'elements');
+          
+          // Export to SVG
+          const svg = await exportToSvg({
+            elements: data.elements || [],
+            appState: data.appState || {},
+            files: data.files || null,
+          });
+          
+          // Clear container and add SVG
+          container.innerHTML = '';
+          container.appendChild(svg);
+          console.log('[DeckBot] Excalidraw SVG rendered successfully');
+        } catch (err) {
+          console.error('[DeckBot] Failed to render Excalidraw:', err);
+          container.innerHTML = `
+            <div style="background: #fee; padding: 20px; border-radius: 8px; color: #c00;">
+              <strong>Error rendering diagram:</strong> ${err.message}
+            </div>
+          `;
+        }
+      }
+    }
+  }
+});
+</script>'''
+    
+    html_content = html_content.replace('</body>', rendering_scripts + '</body>')
+
+    # Return with no-cache headers to prevent stale content
+    response = make_response(html_content)
+    response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    response.headers['Pragma'] = 'no-cache'
+    response.headers['Expires'] = '0'
+    return response
 
 @app.route('/api/presentation/images/<path:filename>')
 def serve_presentation_image(filename):
@@ -122,10 +269,12 @@ def list_presentations():
     
     manager = PresentationManager()
     presentations = manager.list_presentations()
-    
+
     # Enrich with slide count and last modified
+    from deckbot.manager import encode_presentation_name
     for pres in presentations:
-        pres_dir = os.path.join(manager.root_dir, pres['name'])
+        encoded_name = encode_presentation_name(pres['name'])
+        pres_dir = os.path.join(manager.presentations_dir, encoded_name)
         deck_path = os.path.join(pres_dir, 'deck.marp.md')
         
         # Get slide count
@@ -165,12 +314,14 @@ def create_presentation():
     manager = PresentationManager()
     try:
         manager.create_presentation(name, description, template=template)
-        
+
         # Compile the presentation immediately so preview works
-        presentation_dir = os.path.join(manager.root_dir, name)
+        from deckbot.manager import encode_presentation_name
+        encoded_name = encode_presentation_name(name)
+        presentation_dir = os.path.join(manager.presentations_dir, encoded_name)
         try:
             subprocess.run(
-                ["npx", "@marp-team/marp-cli", "deck.marp.md", "--allow-local-files"],
+                ["npx", "@marp-team/marp-cli", "deck.marp.md", "--allow-local-files", "--config-file", MARP_CONFIG_PATH],
                 cwd=presentation_dir,
                 check=True,
                 capture_output=True
@@ -243,14 +394,19 @@ def delete_template():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-@app.route('/api/presentations/<name>/preview-slides')
+@app.route('/api/presentations/<path:name>/preview-slides')
 def get_presentation_preview_slides(name):
     """Generate and return cached PNG previews of all slides for a presentation."""
     import subprocess
     import glob
-    
+
     manager = PresentationManager()
-    pres_dir = os.path.join(manager.root_dir, name)
+    pres = manager.get_presentation(name)
+    if not pres:
+        return jsonify({"error": "Presentation not found"}), 404
+
+    dir_name = pres.get('_dir_name', name)
+    pres_dir = os.path.join(manager.presentations_dir, dir_name)
     
     if not os.path.exists(pres_dir):
         return jsonify({"error": "Presentation not found"}), 404
@@ -311,11 +467,16 @@ def get_presentation_preview_slides(name):
     
     return jsonify({"previews": preview_urls})
 
-@app.route('/api/presentations/<name>/.previews/<filename>')
+@app.route('/api/presentations/<path:name>/.previews/<filename>')
 def serve_presentation_preview(name, filename):
     """Serve a cached preview image for a presentation."""
     manager = PresentationManager()
-    pres_dir = os.path.join(manager.root_dir, name)
+    pres = manager.get_presentation(name)
+    if not pres:
+        return jsonify({"error": "Presentation not found"}), 404
+
+    dir_name = pres.get('_dir_name', name)
+    pres_dir = os.path.join(manager.presentations_dir, dir_name)
     cache_dir = os.path.join(pres_dir, ".previews")
     
     return send_from_directory(cache_dir, filename)
@@ -343,19 +504,9 @@ def get_template_preview_slides(name):
     # Check if previews exist
     existing_previews = sorted(glob.glob(os.path.join(cache_dir, "slide.*.png")))
     
-    # Check if deck was modified after previews were generated
-    needs_regeneration = False
+    # If no previews exist, return empty (don't auto-generate for templates)
+    # Templates should have their previews pre-generated
     if not existing_previews:
-        needs_regeneration = True
-    else:
-        deck_mtime = os.path.getmtime(deck_path)
-        preview_mtime = os.path.getmtime(existing_previews[0])
-        if deck_mtime > preview_mtime:
-            needs_regeneration = True
-    
-    if needs_regeneration:
-        # For templates, return empty previews if not cached
-        # Templates are static so we pre-generate their previews
         return jsonify({"previews": []})
     
     # Return URLs for all preview images
@@ -476,10 +627,115 @@ def set_preference(key):
     data = request.json
     if 'value' not in data:
         return jsonify({"error": "No value provided"}), 400
-    
+
     prefs = PreferencesManager()
     prefs.set(key, data['value'])
     return jsonify({"message": "Preference updated", "key": key, "value": data['value']})
+
+# Content Folder Management APIs
+
+@app.route('/api/content-folder', methods=['GET'])
+def get_content_folder():
+    """Get the current content folder configuration."""
+    from deckbot.preferences import PreferencesManager
+    prefs = PreferencesManager()
+    content_folder = prefs.get('content_folder', os.path.expanduser('~/.deckbot'))
+
+    expanded_path = os.path.expanduser(content_folder)
+    absolute_path = os.path.abspath(expanded_path)
+
+    return jsonify({
+        'content_folder': content_folder,
+        'expanded_path': expanded_path,
+        'absolute_path': absolute_path,
+        'exists': os.path.exists(absolute_path)
+    })
+
+@app.route('/api/content-folder', methods=['POST'])
+def set_content_folder():
+    """Set content folder and trigger reload."""
+    data = request.json
+    new_path = data.get('path')
+
+    if not new_path:
+        return jsonify({'error': 'Path is required'}), 400
+
+    # Validate and expand path
+    expanded_path = os.path.expanduser(new_path)
+    absolute_path = os.path.abspath(expanded_path)
+
+    # Create directory if needed
+    try:
+        if not os.path.exists(absolute_path):
+            os.makedirs(absolute_path)
+
+        # Test write access
+        test_file = os.path.join(absolute_path, '.deckbot_test')
+        with open(test_file, 'w') as f:
+            f.write('test')
+        os.remove(test_file)
+    except Exception as e:
+        return jsonify({'error': f'Path is not writable: {str(e)}'}), 400
+
+    # Save preference
+    from deckbot.preferences import PreferencesManager
+    prefs = PreferencesManager()
+    prefs.set('content_folder', new_path)
+
+    # Trigger reload by clearing current service
+    global current_service
+    current_service = None
+
+    return jsonify({
+        'message': 'Content folder updated',
+        'path': new_path,
+        'absolute_path': absolute_path
+    })
+
+@app.route('/api/content-folder/validate', methods=['POST'])
+def validate_content_folder():
+    """Validate a path without saving."""
+    data = request.json
+    path = data.get('path')
+
+    if not path:
+        return jsonify({'valid': False, 'error': 'Path is required'}), 400
+
+    try:
+        expanded_path = os.path.expanduser(path)
+        absolute_path = os.path.abspath(expanded_path)
+
+        # Check if directory exists or can be created
+        parent_dir = os.path.dirname(absolute_path)
+        if not os.path.exists(parent_dir):
+            return jsonify({
+                'valid': False,
+                'error': f'Parent directory does not exist: {parent_dir}'
+            })
+
+        created = False
+        if not os.path.exists(absolute_path):
+            os.makedirs(absolute_path)
+            created = True
+
+        # Test write access
+        test_file = os.path.join(absolute_path, '.deckbot_test')
+        with open(test_file, 'w') as f:
+            f.write('test')
+        os.remove(test_file)
+
+        return jsonify({
+            'valid': True,
+            'absolute_path': absolute_path,
+            'exists': os.path.exists(absolute_path),
+            'writable': True,
+            'created': created
+        })
+    except Exception as e:
+        return jsonify({
+            'valid': False,
+            'error': str(e)
+        })
 
 # Secrets/Profile Management APIs
 
@@ -652,181 +908,27 @@ def migrate_from_env():
 @app.route('/api/load', methods=['POST'])
 def load_presentation():
     global current_service
-    data = request.json
-    name = data.get('name')
-    manager = PresentationManager()
-    presentation = manager.get_presentation(name)
-    
-    if not presentation:
-        return jsonify({"error": "Presentation not found"}), 404
+    try:
+        data = request.json
+        name = data.get('name')
         
-    current_service = SessionService(presentation)
+        manager = PresentationManager()
+        presentation = manager.get_presentation(name)
+        
+        if not presentation:
+            return jsonify({"error": "Presentation not found"}), 404
+            
+        current_service = SessionService(presentation)
 
-    # Note: State is now managed in frontend localStorage (no backend persistence)
+        # Note: State is now managed in frontend localStorage (no backend persistence)
 
-    # Return history
-    history = current_service.get_history()
-    return jsonify({"message": "Loaded", "history": history, "presentation": presentation})
-
-@app.route('/api/command', methods=['POST'])
-def command():
-    """Handle slash commands"""
-    print("[COMMAND] /api/command endpoint hit")
-    global current_service
-
-    data = request.json
-    command_name = data.get('command', '').lower()
-    args = data.get('args', '').strip()
-    presentation_name = data.get('presentation_name')
-    current_slide = data.get('current_slide', 1)
-
-    print(f"[COMMAND] command={command_name}, args='{args[:50] if args else ''}', pres={presentation_name}")
-
-    # Ensure we have a presentation loaded if one was provided
-    # (This allows logging even for help/tools commands)
-    if presentation_name:
-        if not current_service or current_service.agent.context.get('name') != presentation_name:
-            manager = PresentationManager()
-            presentation = manager.get_presentation(presentation_name)
-            if not presentation:
-                return jsonify({"error": "Presentation not found"}), 404
-            current_service = SessionService(presentation)
-
-    # Handle different commands
-    if command_name == 'fast':
-        # If args provided, send one-shot message with secondary model
-        if args:
-            # Route to chat with secondary model
-            def run_chat():
-                try:
-                    print(f"[COMMAND] Fast one-shot: {args[:100]}")
-                    current_service.send_message(args, current_slide=current_slide, force_model='secondary')
-                except Exception as e:
-                    print(f"[COMMAND] ERROR: {e}")
-                    import traceback
-                    traceback.print_exc()
-
-            # Save user message before starting thread
-            if current_service.agent:
-                current_service.agent._log_message("user", args)
-
-            threading.Thread(target=run_chat, daemon=True).start()
-            return jsonify({"status": "processing"})
-        else:
-            # Just toggle (frontend handles state)
-            # Send confirmation event via SSE
-            if current_service:
-                current_service.emit_event('command_result', {
-                    'command': 'fast',
-                    'message': 'Fast mode toggled'
-                })
-            return jsonify({"status": "toggled"})
-
-    elif command_name == 'export':
-        # Export presentation to PDF
-        if not current_service:
-            return jsonify({"error": "No presentation loaded"}), 400
-
-        def run_export():
-            try:
-                result = current_service.agent.tools_handler.export_pdf()
-                # Emit success event with file path
-                current_service.emit_event('command_result', {
-                    'command': 'export',
-                    'message': result,
-                    'success': True
-                })
-            except Exception as e:
-                current_service.emit_event('command_error', {
-                    'command': 'export',
-                    'error': str(e)
-                })
-
-        threading.Thread(target=run_export, daemon=True).start()
-        return jsonify({"status": "exporting"})
-
-    elif command_name == 'help':
-        # Load and return help.md
-        help_path = os.path.join(os.path.dirname(__file__), 'help.md')
-        try:
-            with open(help_path, 'r') as f:
-                help_content = f.read()
-
-            # Log to chat history if we have a service
-            if current_service and current_service.agent:
-                current_service.agent._log_message("user", "/help")
-                current_service.agent._log_message("system", help_content)
-
-            # Return the content directly - the frontend will display it
-            return jsonify({
-                "status": "help_sent",
-                "content": help_content,
-                "format": "markdown"
-            })
-        except FileNotFoundError:
-            return jsonify({"error": "Help file not found"}), 404
-
-    elif command_name == 'tools':
-        # List available agent tools - this requires loading a presentation to get the agent
-        # But we can provide a generic list or load it lazily
-        if current_service and current_service.agent and current_service.agent.tools_list:
-            # Get tool list from agent
-            tools_info = []
-            for tool in current_service.agent.tools_list:
-                tool_name = tool.__name__ if hasattr(tool, '__name__') else str(tool)
-                tool_doc = tool.__doc__ if hasattr(tool, '__doc__') else ''
-                # Clean up docstring
-                if tool_doc:
-                    tool_doc = tool_doc.strip().split('\n')[0]  # First line only
-                tools_info.append({
-                    'name': tool_name,
-                    'description': tool_doc or 'No description available'
-                })
-        else:
-            # Provide a static list of common tools when no presentation is loaded
-            tools_info = [
-                {'name': 'list_files', 'description': 'List all files in the presentation directory'},
-                {'name': 'read_file', 'description': 'Read the contents of a file'},
-                {'name': 'write_file', 'description': 'Write or overwrite a file'},
-                {'name': 'replace_text', 'description': 'Find and replace text in a file'},
-                {'name': 'generate_image', 'description': 'Generate AI images for slides'},
-                {'name': 'compile_presentation', 'description': 'Compile Markdown to HTML presentation'},
-                {'name': 'export_pdf', 'description': 'Export presentation as PDF'},
-                {'name': 'go_to_slide', 'description': 'Navigate to a specific slide'},
-                {'name': 'inspect_slide', 'description': 'Visual inspection of a slide using AI'},
-                {'name': 'validate_deck', 'description': 'Check presentation for errors'},
-            ]
-
-        # Format as markdown with better spacing and emphasis
-        tools_content = "# Available Agent Tools\n\n"
-        tools_content += "The AI agent has access to the following tools:\n\n"
-        tools_content += "---\n\n"
-        for i, tool in enumerate(tools_info):
-            tools_content += f"### `{tool['name']}`\n\n"
-            tools_content += f"{tool['description']}\n\n"
-            if i < len(tools_info) - 1:  # Add separator between tools
-                tools_content += "---\n\n"
-
-        # Log to chat history if we have a service
-        if current_service and current_service.agent:
-            current_service.agent._log_message("user", "/tools")
-            current_service.agent._log_message("system", tools_content)
-
-        return jsonify({
-            "status": "tools_sent",
-            "content": tools_content,
-            "format": "markdown",
-            "tools": tools_info
-        })
-
-    else:
-        # Unknown command
-        if current_service:
-            current_service.emit_event('command_error', {
-                'command': command_name,
-                'error': f'Unknown command: /{command_name}'
-            })
-        return jsonify({"error": f"Unknown command: /{command_name}"}), 400
+        # Return history
+        history = current_service.get_history()
+        return jsonify({"message": "Loaded", "history": history, "presentation": presentation})
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/api/chat', methods=['POST'])
 def chat():
@@ -836,7 +938,6 @@ def chat():
     # Get state parameters from request (new behavior)
     presentation_name = None
     current_slide = 1
-    model = None  # New: model selection parameter
 
     # Handle both JSON and form data (for image uploads)
     user_input = ""
@@ -847,15 +948,15 @@ def chat():
         user_input = data.get('message', '')
         presentation_name = data.get('presentation_name')
         current_slide = data.get('current_slide', 1)
-        model = data.get('model', 'primary')  # New: get model parameter
-        print(f"[CHAT] JSON request: message='{user_input[:50]}...', pres={presentation_name}, slide={current_slide}, model={model}")
+        model_preference = data.get('model', 'primary')  # 'primary' or 'secondary'
+        print(f"[CHAT] JSON request: message='{user_input[:50]}...', pres={presentation_name}, slide={current_slide}, model={model_preference}")
     else:
         # Form data with images
         user_input = request.form.get('message', '')
         presentation_name = request.form.get('presentation_name')
         current_slide = int(request.form.get('current_slide', 1))
-        model = request.form.get('model', 'primary')  # New: get model parameter
-        print(f"[CHAT] Form request: message='{user_input[:50]}...', pres={presentation_name}, slide={current_slide}, model={model}")
+        model_preference = request.form.get('model', 'primary')
+        print(f"[CHAT] Form request: message='{user_input[:50]}...', pres={presentation_name}, slide={current_slide}, model={model_preference}")
 
     # Fallback: use global session if no presentation_name provided (backward compatibility)
     if not presentation_name and current_service:
@@ -917,15 +1018,17 @@ def chat():
     def run_chat():
         try:
             print("[CHAT] Thread started, calling send_message...")
+            # Determine force_model parameter
+            force_model_param = 'secondary' if model_preference == 'secondary' else None
             # Include image references in the message
             if uploaded_images:
                 image_refs = " ".join([f"[Image: {path}]" for path in uploaded_images])
                 full_message = f"{user_input} {image_refs}".strip()
                 print(f"[CHAT] Sending with images: {full_message[:100]}")
-                current_service.send_message(full_message, current_slide=current_slide, force_model=model if model != 'primary' else None)
+                current_service.send_message(full_message, current_slide=current_slide, force_model=force_model_param)
             else:
                 print(f"[CHAT] Sending message: {user_input[:100]}")
-                current_service.send_message(user_input, current_slide=current_slide, force_model=model if model != 'primary' else None)
+                current_service.send_message(user_input, current_slide=current_slide, force_model=force_model_param)
             print("[CHAT] send_message completed")
         except Exception as e:
             print(f"[CHAT] ERROR in thread: {e}")
@@ -943,9 +1046,224 @@ def cancel_chat():
     global current_service
     if not current_service:
         return jsonify({"error": "No presentation loaded"}), 400
-    
+
     current_service.cancel()
     return jsonify({"status": "cancelled"})
+
+@app.route('/api/slash-command', methods=['POST'])
+def slash_command():
+    """Handle slash commands like /fast, /export, /help, /tools"""
+    global current_service
+
+    data = request.json
+    command = data.get('command', '').strip()
+    args = data.get('args', '').strip()
+    presentation_name = data.get('presentation_name')
+
+    if not command:
+        send_sse_event('command_error', {'error': 'No command provided'})
+        return jsonify({"error": "No command provided"}), 400
+
+    # Remove leading slash if present
+    if command.startswith('/'):
+        command = command[1:]
+
+    # Ensure service is loaded for commands that need it
+    if command in ['fast', 'export', 'tools']:
+        # Try to get presentation name from request or current service
+        if not presentation_name and current_service:
+            presentation_name = current_service.agent.context.get('name')
+
+        # Load service if needed
+        if presentation_name:
+            if not current_service or current_service.agent.context.get('name') != presentation_name:
+                manager = PresentationManager()
+                presentation = manager.get_presentation(presentation_name)
+                if not presentation:
+                    send_sse_event('command_error', {'error': 'Presentation not found'})
+                    return jsonify({"error": "Presentation not found"}), 404
+                current_service = SessionService(presentation)
+
+    try:
+        # Handle /fast command
+        if command == 'fast':
+            if args:
+                # One-shot fast message - send args to chat with secondary model
+                if not current_service:
+                    send_sse_event('command_error', {'error': 'No presentation loaded'})
+                    return jsonify({"error": "No presentation loaded"}), 400
+
+                # Send the message with secondary model
+                def run_fast_chat():
+                    try:
+                        current_service.send_message(args, force_model='secondary')
+                    except Exception as e:
+                        print(f"[FAST] ERROR: {e}")
+                        send_sse_event('command_error', {'error': str(e)})
+
+                threading.Thread(target=run_fast_chat, daemon=True).start()
+                send_sse_event('command_result', {
+                    'command': 'fast',
+                    'message': f'Sending message with fast model: {args[:50]}...'
+                })
+                return jsonify({"status": "processing"})
+            else:
+                # Toggle fast mode - this is handled by frontend state
+                send_sse_event('command_result', {
+                    'command': 'fast',
+                    'message': 'Fast mode toggled'
+                })
+                return jsonify({"status": "toggled"})
+
+        # Handle /export command
+        elif command == 'export':
+            if not current_service:
+                send_sse_event('command_error', {'error': 'No presentation loaded'})
+                return jsonify({"error": "No presentation loaded"}), 400
+
+            # Export presentation to PDF
+            pres_dir = current_service.agent.presentation_dir
+            deck_md = os.path.join(pres_dir, "deck.marp.md")
+
+            if not os.path.exists(deck_md):
+                send_sse_event('command_error', {'error': 'No deck.marp.md file found'})
+                return jsonify({"error": "No presentation file found"}), 404
+
+            # Generate PDF using Marp
+            import tempfile
+            import subprocess
+
+            # Create temp PDF file
+            temp_pdf = tempfile.NamedTemporaryFile(suffix='.pdf', delete=False)
+            temp_pdf_path = temp_pdf.name
+            temp_pdf.close()
+
+            try:
+                # Try to find marp executable
+                marp_cmd = None
+                for cmd in ['npx', 'marp']:
+                    try:
+                        subprocess.run([cmd, '--version'], capture_output=True, check=True)
+                        marp_cmd = cmd
+                        break
+                    except (subprocess.CalledProcessError, FileNotFoundError):
+                        continue
+
+                if not marp_cmd:
+                    send_sse_event('command_error', {'error': 'Marp CLI not available'})
+                    return jsonify({"error": "Marp CLI not installed"}), 500
+
+                # Build command
+                cmd = [marp_cmd]
+                if marp_cmd == 'npx':
+                    cmd.append('@marp-team/marp-cli')
+                cmd.extend([deck_md, '--pdf', '-o', temp_pdf_path])
+
+                # Execute marp
+                result = subprocess.run(cmd, capture_output=True, text=True, cwd=pres_dir)
+
+                if result.returncode != 0:
+                    send_sse_event('command_error', {'error': f'PDF generation failed: {result.stderr}'})
+                    return jsonify({"error": "PDF generation failed"}), 500
+
+                send_sse_event('command_result', {
+                    'command': 'export',
+                    'file_path': temp_pdf_path,
+                    'message': 'PDF generated successfully'
+                })
+                return jsonify({"status": "exported", "file_path": temp_pdf_path})
+            except Exception as e:
+                send_sse_event('command_error', {'error': str(e)})
+                return jsonify({"error": str(e)}), 500
+
+        # Handle /help command
+        elif command == 'help':
+            # Read help.md file
+            help_path = os.path.join(os.path.dirname(__file__), '..', '..', 'help.md')
+            if os.path.exists(help_path):
+                with open(help_path, 'r') as f:
+                    help_content = f.read()
+            else:
+                # Default help content
+                help_content = """# DeckBot Help
+
+## Slash Commands
+- `/fast` - Toggle fast mode (uses secondary model)
+- `/fast <message>` - Send a one-shot message with fast model
+- `/export` - Export presentation to PDF
+- `/help` - Show this help
+- `/tools` - List available agent tools
+
+## Keyboard Shortcuts
+- `Ctrl+Enter` or `Cmd+Enter` - Send message
+- `Ctrl+K` or `Cmd+K` - Focus chat input
+
+## UI Tips
+- Click slide previews to navigate
+- Use code view to edit presentation files
+- Upload images by dragging to chat
+"""
+
+            send_sse_event('command_result', {
+                'command': 'help',
+                'content': help_content,
+                'message': 'Help information'
+            })
+            return jsonify({"status": "success", "content": help_content})
+
+        # Handle /tools command
+        elif command == 'tools':
+            if not current_service or not current_service.agent:
+                send_sse_event('command_error', {'error': 'No agent loaded'})
+                return jsonify({"error": "No agent loaded"}), 400
+
+            # Get tool definitions from agent
+            tools = []
+            if hasattr(current_service.agent, 'tools_handler'):
+                # Extract tool information
+                tool_methods = [
+                    method for method in dir(current_service.agent.tools_handler)
+                    if callable(getattr(current_service.agent.tools_handler, method))
+                    and not method.startswith('_')
+                    and method not in ['on_tool_call', 'on_agent_request']
+                ]
+
+                for method_name in tool_methods:
+                    method = getattr(current_service.agent.tools_handler, method_name)
+                    doc = method.__doc__ or "No description available"
+                    # Get first line of docstring
+                    description = doc.split('\n')[0].strip()
+                    tools.append({
+                        'name': method_name,
+                        'description': description
+                    })
+
+            tools_content = "# Available Agent Tools\n\n"
+            for tool in tools:
+                tools_content += f"- **{tool['name']}**: {tool['description']}\n"
+
+            send_sse_event('command_result', {
+                'command': 'tools',
+                'tools': tools,
+                'content': tools_content,
+                'message': f'Found {len(tools)} tools'
+            })
+            return jsonify({"status": "success", "tools": tools})
+
+        # Unknown command
+        else:
+            send_sse_event('command_error', {
+                'error': f'Command not recognized: /{command}',
+                'message': 'Unknown command. Try /help for available commands.'
+            })
+            return jsonify({"error": "Command not recognized"}), 404
+
+    except Exception as e:
+        print(f"[SLASH] ERROR: {e}")
+        import traceback
+        traceback.print_exc()
+        send_sse_event('command_error', {'error': str(e)})
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/api/images/generate', methods=['POST'])
 def generate_images():
@@ -1123,14 +1441,20 @@ def events():
         # We check queue every 0.1s
         while True:
             # Check if service changed (dynamic subscription)
-            global current_service
+            global current_service, global_events_queue
             if current_service != last_service:
                 if current_service:
                     current_service.subscribe(listener)
                 last_service = current_service
 
+            # Process events from service-specific queue
             while events_queue:
                 event_type, data = events_queue.pop(0)
+                yield f"event: {event_type}\ndata: {json.dumps(data)}\n\n"
+
+            # Also process events from global queue (for slash commands, etc.)
+            while global_events_queue:
+                event_type, data = global_events_queue.pop(0)
                 yield f"event: {event_type}\ndata: {json.dumps(data)}\n\n"
 
             # Send keepalive comment every 30 seconds to prevent timeout
@@ -1161,10 +1485,11 @@ def get_presentation_settings():
     
     if not pres:
         return jsonify({"error": "Presentation not found"}), 404
-    
+
     # Also try to get title from Marp front matter
     title = pres.get("name", "")  # Default to name from metadata
-    marp_path = os.path.join(manager.root_dir, pres_name, "deck.marp.md")
+    dir_name = pres.get('_dir_name', pres_name)
+    marp_path = os.path.join(manager.presentations_dir, dir_name, "deck.marp.md")
     if os.path.exists(marp_path):
         try:
             with open(marp_path, "r") as f:
@@ -1249,14 +1574,19 @@ def set_presentation_settings():
         # Recompile
         if presentation_dir and os.path.exists(presentation_dir):
             import subprocess
-            subprocess.run(["npx", "@marp-team/marp-cli", "deck.marp.md", "--allow-local-files"], 
+            subprocess.run(["npx", "@marp-team/marp-cli", "deck.marp.md", "--allow-local-files", "--config-file", MARP_CONFIG_PATH],
                           cwd=presentation_dir, check=True)
         elif pres_name:
             # Fallback: construct path
-            presentation_dir = os.path.join(manager.root_dir, pres_name)
+            pres = manager.get_presentation(pres_name)
+            if pres:
+                dir_name = pres.get('_dir_name', pres_name)
+                presentation_dir = os.path.join(manager.presentations_dir, dir_name)
+            else:
+                presentation_dir = None
             if os.path.exists(presentation_dir):
                 import subprocess
-                subprocess.run(["npx", "@marp-team/marp-cli", "deck.marp.md", "--allow-local-files"], 
+                subprocess.run(["npx", "@marp-team/marp-cli", "deck.marp.md", "--allow-local-files", "--config-file", MARP_CONFIG_PATH],
                               cwd=presentation_dir, check=True)
             
     except Exception as e:
@@ -1619,7 +1949,7 @@ def save_file():
         compile_result = {"success": True, "message": ""}
         try:
             result = subprocess.run(
-                ["npx", "@marp-team/marp-cli", "deck.marp.md", "--allow-local-files"],
+                ["npx", "@marp-team/marp-cli", "deck.marp.md", "--allow-local-files", "--config-file", MARP_CONFIG_PATH],
                 cwd=pres_dir,
                 check=True,
                 capture_output=True,
@@ -1931,7 +2261,12 @@ def serve_static(path):
     # Fallback to index.html for client-side routing
     index_path = os.path.join(VITE_DIST_PATH, 'index.html')
     if os.path.exists(index_path):
-        with open(index_path, 'r') as f:
-            return f.read()
+        from flask import make_response, send_file
+        # Use send_file with cache control headers
+        response = send_file(index_path, mimetype='text/html')
+        response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate, max-age=0'
+        response.headers['Pragma'] = 'no-cache'
+        response.headers['Expires'] = '0'
+        return response
     
     return "Not found", 404

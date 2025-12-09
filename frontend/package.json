@@ -10,11 +10,13 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@excalidraw/excalidraw": "^0.18.0",
     "@monaco-editor/react": "^4.7.0",
     "@tanstack/react-query": "^5.90.12",
     "highlight.js": "^11.11.1",
     "lucide-react": "^0.556.0",
     "marked": "^17.0.1",
+    "mermaid": "^11.12.2",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-fontpicker-ts": "^1.2.0",

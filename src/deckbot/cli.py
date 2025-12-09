@@ -219,13 +219,14 @@ def build(name, format):
     """Compile presentation to static file"""
     manager = PresentationManager()
     presentation = manager.get_presentation(name)
-    
+
     if not presentation:
         console.print(f"[red]Presentation '{name}' not found.[/red]")
         return
 
-    root_dir = manager.root_dir
-    presentation_dir = os.path.join(root_dir, name)
+    # Use encoded directory name from presentation metadata
+    dir_name = presentation.get('_dir_name', name)
+    presentation_dir = os.path.join(manager.presentations_dir, dir_name)
     input_file = os.path.join(presentation_dir, "deck.marp.md")
     
     if not os.path.exists(input_file):

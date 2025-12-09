@@ -7,13 +7,13 @@ from deckbot.manager import PresentationManager
 @given('I have a new presentation "{name}"')
 def step_create_presentation(context, name):
     manager = PresentationManager(root_dir=context.temp_dir)
-    # Ensure it's clean
-    if os.path.exists(os.path.join(context.temp_dir, name)):
-        import shutil
-        shutil.rmtree(os.path.join(context.temp_dir, name))
+    # Create presentation
     manager.create_presentation(name, "Visual Test Deck")
     context.current_presentation_name = name
-    context.presentation_dir = os.path.join(context.temp_dir, name)
+    # Get encoded directory name
+    pres = manager.get_presentation(name)
+    dir_name = pres.get('_dir_name', name)
+    context.presentation_dir = os.path.join(context.temp_dir, 'presentations', dir_name)
 
 @given('the presentation contains a slide with text "{text}"')
 def step_add_slide_content(context, text):

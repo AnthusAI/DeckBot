@@ -15,13 +15,18 @@ def step_impl(context, name, description):
     pres = manager.get_presentation(name)
     if pres:
         pres['description'] = description
-        metadata_path = os.path.join(context.temp_dir, name, "metadata.json")
+        # Use encoded directory name from presentation metadata
+        dir_name = pres.get('_dir_name', name)
+        metadata_path = os.path.join(context.temp_dir, 'presentations', dir_name, "metadata.json")
         with open(metadata_path, "w") as f:
             json.dump(pres, f, indent=2)
 
 @given('the presentation "{name}" has an image file "{filename}"')
 def step_impl(context, name, filename):
-    images_dir = os.path.join(context.temp_dir, name, "images")
+    manager = PresentationManager(root_dir=context.temp_dir)
+    pres = manager.get_presentation(name)
+    dir_name = pres.get('_dir_name', name)
+    images_dir = os.path.join(context.temp_dir, 'presentations', dir_name, "images")
     os.makedirs(images_dir, exist_ok=True)
     image_path = os.path.join(images_dir, filename)
     # Create a dummy image file
@@ -30,13 +35,18 @@ def step_impl(context, name, filename):
 
 @given('I have a folder named "{folder_name}"')
 def step_impl(context, folder_name):
-    folder_path = os.path.join(context.temp_dir, folder_name)
+    # Create folder in presentations subdirectory with URL encoding (spaces → %20, etc)
+    from urllib.parse import quote
+    encoded_folder_name = quote(folder_name, safe='')
+    folder_path = os.path.join(context.temp_dir, 'presentations', encoded_folder_name)
     os.makedirs(folder_path, exist_ok=True)
     # Create a minimal metadata.json to make it a valid presentation folder
+    # Store the _dir_name to match what PresentationManager does
     metadata_path = os.path.join(folder_path, "metadata.json")
     with open(metadata_path, "w") as f:
         json.dump({
-            "name": folder_name,
+            "name": folder_name,  # User-facing name (not encoded)
+            "_dir_name": encoded_folder_name,  # Encoded directory name
             "description": "",
             "aspect_ratio": "4:3",
             "created_at": "2024-01-01T00:00:00",
@@ -45,7 +55,10 @@ def step_impl(context, folder_name):
 
 @given('the presentation "{name}" has a file "{filename}"')
 def step_impl(context, name, filename):
-    file_path = os.path.join(context.temp_dir, name, filename)
+    manager = PresentationManager(root_dir=context.temp_dir)
+    pres = manager.get_presentation(name)
+    dir_name = pres.get('_dir_name', name)
+    file_path = os.path.join(context.temp_dir, 'presentations', dir_name, filename)
     # Ensure the file exists (it should from create_presentation)
     if not os.path.exists(file_path):
         os.makedirs(os.path.dirname(file_path), exist_ok=True)
@@ -137,79 +150,56 @@ def step_impl(context, new_name):
 
 @then('I should have a presentation folder for "{name}"')
 def step_impl(context, name):
-    # Check if folder exists (may be auto-incremented)
-    # First try the exact name, then check for auto-incremented versions
-    folder_path = os.path.join(context.temp_dir, name)
-    if not os.path.exists(folder_path):
-        # Check for auto-incremented versions
-        counter = 2
-        while os.path.exists(os.path.join(context.temp_dir, f"{name} {counter}")):
-            folder_path = os.path.join(context.temp_dir, f"{name} {counter}")
-            break
-        counter += 1
-    
+    # Check in presentations subdirectory
+    presentations_dir = os.path.join(context.temp_dir, 'presentations')
+
     # At minimum, check that metadata exists somewhere
     found = False
-    for item in os.listdir(context.temp_dir):
-        item_path = os.path.join(context.temp_dir, item)
-        if os.path.isdir(item_path):
-            metadata_path = os.path.join(item_path, "metadata.json")
-            if os.path.exists(metadata_path):
-                with open(metadata_path, "r") as f:
-                    metadata = json.load(f)
-                    if metadata.get("name") == name:
-                        found = True
-                        break
-    
-    assert found, f"Presentation with name '{name}' not found in metadata"
+    if os.path.exists(presentations_dir):
+        for item in os.listdir(presentations_dir):
+            item_path = os.path.join(presentations_dir, item)
+            if os.path.isdir(item_path):
+                metadata_path = os.path.join(item_path, "metadata.json")
+                if os.path.exists(metadata_path):
+                    with open(metadata_path, "r") as f:
+                        metadata = json.load(f)
+                        if metadata.get("name") == name:
+                            found = True
+                            break
+
+    assert found, f"Presentation with name '{name}' not found in {presentations_dir}"
 
 @then('I should have a folder named "{folder_name}"')
 def step_impl(context, folder_name):
-    folder_path = os.path.join(context.temp_dir, folder_name)
-    assert os.path.exists(folder_path), f"Folder '{folder_name}' does not exist"
+    # Folder names with spaces are URL-encoded on disk
+    from urllib.parse import quote
+    encoded_folder_name = quote(folder_name, safe='')
+    folder_path = os.path.join(context.temp_dir, 'presentations', encoded_folder_name)
+    assert os.path.exists(folder_path), f"Folder '{folder_name}' (encoded as '{encoded_folder_name}') does not exist"
 
 @then('the presentation "{name}" should have description "{description}"')
 def step_impl(context, name, description):
-    # Find the folder by checking metadata
-    found_folder = None
-    for item in os.listdir(context.temp_dir):
-        item_path = os.path.join(context.temp_dir, item)
-        if os.path.isdir(item_path):
-            metadata_path = os.path.join(item_path, "metadata.json")
-            if os.path.exists(metadata_path):
-                with open(metadata_path, "r") as f:
-                    metadata = json.load(f)
-                    if metadata.get("name") == name:
-                        found_folder = item_path
-                        break
-    
-    assert found_folder is not None, f"Presentation with name '{name}' not found"
-    metadata_path = os.path.join(found_folder, "metadata.json")
-    with open(metadata_path, "r") as f:
-        metadata = json.load(f)
-    assert metadata.get("description") == description, f"Expected description '{description}', got '{metadata.get('description')}'"
+    # Find the folder by checking metadata in presentations subdirectory
+    manager = PresentationManager(root_dir=context.temp_dir)
+    pres = manager.get_presentation(name)
+    assert pres is not None, f"Presentation with name '{name}' not found"
+
+    assert pres.get("description") == description, f"Expected description '{description}', got '{pres.get('description')}'"
 
 @then('the presentation metadata name should be "{name}"')
 def step_impl(context, name):
-    # Find any folder with this name in metadata
-    found = False
-    for item in os.listdir(context.temp_dir):
-        item_path = os.path.join(context.temp_dir, item)
-        if os.path.isdir(item_path):
-            metadata_path = os.path.join(item_path, "metadata.json")
-            if os.path.exists(metadata_path):
-                with open(metadata_path, "r") as f:
-                    metadata = json.load(f)
-                    if metadata.get("name") == name:
-                        found = True
-                        break
-    
-    assert found, f"No presentation found with metadata name '{name}'"
+    # Find any folder with this name in metadata in presentations subdirectory
+    manager = PresentationManager(root_dir=context.temp_dir)
+    pres = manager.get_presentation(name)
+    assert pres is not None, f"No presentation found with metadata name '{name}'"
 
 @then('the presentation "{folder_name}" should have name "{name}" in metadata')
 def step_impl(context, folder_name, name):
-    folder_path = os.path.join(context.temp_dir, folder_name)
-    assert os.path.exists(folder_path), f"Folder '{folder_name}' does not exist"
+    # folder_name might have spaces which get URL-encoded
+    from urllib.parse import quote
+    encoded_folder_name = quote(folder_name, safe='')
+    folder_path = os.path.join(context.temp_dir, 'presentations', encoded_folder_name)
+    assert os.path.exists(folder_path), f"Folder '{folder_name}' (encoded as '{encoded_folder_name}') does not exist"
     metadata_path = os.path.join(folder_path, "metadata.json")
     with open(metadata_path, "r") as f:
         metadata = json.load(f)
@@ -217,10 +207,11 @@ def step_impl(context, folder_name, name):
 
 @then('the presentation "{name}" should have an image file "{filename}"')
 def step_impl(context, name, filename):
-    # Find the folder by checking metadata
+    # Find the folder by checking metadata in presentations subdirectory
     found_folder = None
-    for item in os.listdir(context.temp_dir):
-        item_path = os.path.join(context.temp_dir, item)
+    presentations_dir = os.path.join(context.temp_dir, 'presentations')
+    for item in os.listdir(presentations_dir):
+        item_path = os.path.join(presentations_dir, item)
         if os.path.isdir(item_path):
             metadata_path = os.path.join(item_path, "metadata.json")
             if os.path.exists(metadata_path):
@@ -236,20 +227,15 @@ def step_impl(context, name, filename):
 
 @then('the presentation "{name}" should not have an image file "{filename}"')
 def step_impl(context, name, filename):
-    # Find the folder by checking metadata
-    found_folder = None
-    for item in os.listdir(context.temp_dir):
-        item_path = os.path.join(context.temp_dir, item)
-        if os.path.isdir(item_path):
-            metadata_path = os.path.join(item_path, "metadata.json")
-            if os.path.exists(metadata_path):
-                with open(metadata_path, "r") as f:
-                    metadata = json.load(f)
-                    if metadata.get("name") == name:
-                        found_folder = item_path
-                        break
-    
-    assert found_folder is not None, f"Presentation with name '{name}' not found"
+    # Find the folder by checking metadata in presentations subdirectory
+    manager = PresentationManager(root_dir=context.temp_dir)
+    pres = manager.get_presentation(name)
+    assert pres is not None, f"Presentation with name '{name}' not found"
+
+    dir_name = pres.get('_dir_name', name)
+    presentations_dir = os.path.join(context.temp_dir, 'presentations')
+    found_folder = os.path.join(presentations_dir, dir_name)
+
     image_path = os.path.join(found_folder, "images", filename)
     assert not os.path.exists(image_path), f"Image file '{filename}' should not exist in presentation '{name}'"
 
@@ -257,20 +243,15 @@ def step_impl(context, name, filename):
 
 @then('the presentation "{name}" should have a file "{filename}"')
 def step_impl(context, name, filename):
-    # Find the folder by checking metadata
-    found_folder = None
-    for item in os.listdir(context.temp_dir):
-        item_path = os.path.join(context.temp_dir, item)
-        if os.path.isdir(item_path):
-            metadata_path = os.path.join(item_path, "metadata.json")
-            if os.path.exists(metadata_path):
-                with open(metadata_path, "r") as f:
-                    metadata = json.load(f)
-                    if metadata.get("name") == name:
-                        found_folder = item_path
-                        break
-    
-    assert found_folder is not None, f"Presentation with name '{name}' not found"
+    # Find the folder by checking metadata in presentations subdirectory
+    manager = PresentationManager(root_dir=context.temp_dir)
+    pres = manager.get_presentation(name)
+    assert pres is not None, f"Presentation with name '{name}' not found"
+
+    dir_name = pres.get('_dir_name', name)
+    presentations_dir = os.path.join(context.temp_dir, 'presentations')
+    found_folder = os.path.join(presentations_dir, dir_name)
+
     file_path = os.path.join(found_folder, filename)
     assert os.path.exists(file_path), f"File '{filename}' not found in presentation '{name}'"
 

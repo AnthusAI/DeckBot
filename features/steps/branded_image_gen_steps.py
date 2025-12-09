@@ -15,7 +15,10 @@ def step_impl(context, name):
 
 @given('the presentation "{name}" has image style "{style}"')
 def step_impl(context, name, style):
-    path = os.path.join(context.temp_dir, name, "metadata.json")
+    manager = PresentationManager(root_dir=context.temp_dir)
+    pres = manager.get_presentation(name)
+    dir_name = pres.get('_dir_name', name)
+    path = os.path.join(context.temp_dir, 'presentations', dir_name, "metadata.json")
     with open(path, 'r') as f:
         data = json.load(f)
     
@@ -29,12 +32,15 @@ def step_impl(context, name, style):
 
 @given('the presentation "{name}" has a style reference image "{image_name}"')
 def step_impl(context, name, image_name):
-    path = os.path.join(context.temp_dir, name, "metadata.json")
+    manager = PresentationManager(root_dir=context.temp_dir)
+    pres = manager.get_presentation(name)
+    dir_name = pres.get('_dir_name', name)
+    path = os.path.join(context.temp_dir, 'presentations', dir_name, "metadata.json")
     with open(path, 'r') as f:
         data = json.load(f)
     
     # Create dummy image file in images folder
-    images_dir = os.path.join(context.temp_dir, name, "images")
+    images_dir = os.path.join(context.temp_dir, 'presentations', dir_name, "images")
     os.makedirs(images_dir, exist_ok=True)
     img_path = os.path.join(images_dir, image_name)
     
@@ -110,14 +116,17 @@ def step_impl(context, text):
         
     # Fallback check: metadata (for text in style instructions)
     if not found:
-        metadata_path = os.path.join(context.temp_dir, context.pres_context['name'], 'metadata.json')
+        manager = PresentationManager(root_dir=context.temp_dir)
+        pres = manager.get_presentation(context.pres_context['name'])
+        dir_name = pres.get('_dir_name', context.pres_context['name'])
+        metadata_path = os.path.join(context.temp_dir, 'presentations', dir_name, 'metadata.json')
         with open(metadata_path, 'r') as f:
             metadata = json.load(f)
             style = metadata.get('image_style', {})
             style_prompt = style.get('prompt', '')
             if text in style_prompt:
                 found = True
-                
+
     assert found, f"Expected '{text}' in generated prompt or metadata"
 
 @then('the image generation request should include the reference image "{image_name}"')

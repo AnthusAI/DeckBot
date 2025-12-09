@@ -1,3 +1,4 @@
+@integration @browser
 Feature: Code View
   As a user
   I want to view the source files of my presentation
@@ -113,4 +114,3 @@ Feature: Code View
     Then I should see Monaco editor
     And I should see a save button
     And the content should be editable
-

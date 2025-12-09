@@ -8,9 +8,19 @@ from deckbot.manager import PresentationManager
 
 @then('the message "{message}" should be logged to "{filepath}"')
 def step_impl(context, message, filepath):
-    full_path = os.path.join(context.temp_dir, filepath)
+    # filepath format: "presentation-name/chat_history.jsonl"
+    # Need to use PresentationManager to get encoded directory name
+    parts = filepath.split('/')
+    presentation_name = parts[0]
+    filename = parts[1] if len(parts) > 1 else 'chat_history.jsonl'
+
+    manager = PresentationManager(root_dir=context.temp_dir)
+    pres = manager.get_presentation(presentation_name)
+    dir_name = pres.get('_dir_name', presentation_name)
+    full_path = os.path.join(context.temp_dir, 'presentations', dir_name, filename)
+
     assert os.path.exists(full_path), f"Log file {full_path} not found"
-    
+
     found = False
     with open(full_path, 'r') as f:
         for line in f:
@@ -29,13 +39,15 @@ def step_impl(context, message):
     presentation_name = "history-test" # Default fallback
     if hasattr(context, 'current_presentation_name') and context.current_presentation_name:
         presentation_name = context.current_presentation_name
-        
+
     if not manager.get_presentation(presentation_name):
         manager.create_presentation(presentation_name, "History Test")
-    
-    presentation_dir = os.path.join(context.temp_dir, presentation_name)
+
+    pres = manager.get_presentation(presentation_name)
+    dir_name = pres.get('_dir_name', presentation_name)
+    presentation_dir = os.path.join(context.temp_dir, 'presentations', dir_name)
     history_file = os.path.join(presentation_dir, "chat_history.jsonl")
-    
+
     with open(history_file, 'w') as f:
         # Agent uses 'content' key
         f.write(json.dumps({"role": "user", "content": message}) + "\n")
@@ -46,29 +58,19 @@ def step_impl(context, message):
     # Helper to get current presentation name (set in cli_steps or tools_steps)
     presentation_name = getattr(context, 'current_presentation_name', None)
     if not presentation_name:
-         # Try to infer from recent 'Given I have a presentation named "{name}"'
-         # This relies on previous steps setting it or us guessing.
-         # In 'resume-msg-deck' scenario, name is passed.
-         pass
+        # Default fallback
+        presentation_name = "resume-msg-deck"
 
-    # If we can't find name, assume one or error?
-    # In behave steps, we don't always have global context unless we set it.
-    # Let's update cli_steps or just require name in this step?
-    # The scenario says: Given I have a presentation named "resume-msg-deck"
-    # tools_steps sets context.current_presentation_name if I implemented it that way.
-    # Let's check tools_steps.py
-    
-    # Just explicitly find the directory for now if unique
-    if not presentation_name:
-        # Hack: find the first directory in temp_dir
-        subdirs = [d for d in os.listdir(context.temp_dir) if os.path.isdir(os.path.join(context.temp_dir, d))]
-        if subdirs:
-            presentation_name = subdirs[0]
-    
-    presentation_dir = os.path.join(context.temp_dir, presentation_name)
+    manager = PresentationManager(root_dir=context.temp_dir)
+    if not manager.get_presentation(presentation_name):
+        manager.create_presentation(presentation_name, "History Test")
+
+    pres = manager.get_presentation(presentation_name)
+    dir_name = pres.get('_dir_name', presentation_name)
+    presentation_dir = os.path.join(context.temp_dir, 'presentations', dir_name)
     os.makedirs(presentation_dir, exist_ok=True)
     history_file = os.path.join(presentation_dir, "chat_history.jsonl")
-    
+
     with open(history_file, 'w') as f:
         f.write(json.dumps({"role": "user", "content": "Previous prompt"}) + "\n")
         f.write(json.dumps({"role": "model", "content": message}) + "\n")

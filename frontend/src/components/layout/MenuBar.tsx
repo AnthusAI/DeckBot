@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Info, Settings, FilePlus, FolderOpen, XCircle, Copy, Sliders, FileDown, Eye, LayoutTemplate, Code2, Sun, Moon, Monitor } from 'lucide-react'
 import { useAppStore } from '@/store/useAppStore'
 import { cn } from '@/lib/utils'
@@ -19,14 +20,49 @@ interface MenuItemProps {
 
 function MenuItem({ label, children }: MenuItemProps) {
   const [isOpen, setIsOpen] = useState(false)
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  // Close menu when clicking outside
+  useEffect(() => {
+    if (!isOpen) return
+
+    const handleClickOutside = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setIsOpen(false)
+      }
+    }
+
+    // Close menu when clicking inside (on menu items)
+    const handleClickInside = (e: MouseEvent) => {
+      if (containerRef.current?.contains(e.target as Node)) {
+        // Check if click was on a button (menu item)
+        const target = e.target as HTMLElement
+        if (target.tagName === 'BUTTON' || target.closest('button')) {
+          setIsOpen(false)
+        }
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside)
+    document.addEventListener('click', handleClickInside)
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+      document.removeEventListener('click', handleClickInside)
+    }
+  }, [isOpen])
 
   return (
     <div
+      ref={containerRef}
       className="relative"
       onMouseEnter={() => setIsOpen(true)}
       onMouseLeave={() => setIsOpen(false)}
     >
-      <button className="px-3 py-1.5 text-sm font-medium rounded hover:bg-accent transition-colors">
+      <button
+        className="px-3 py-1.5 text-sm font-medium rounded hover:bg-accent transition-colors"
+        onClick={() => setIsOpen(!isOpen)}
+      >
         {label}
       </button>
       {isOpen && (
@@ -81,15 +117,20 @@ export function MenuBar({
   onPreferences,
   onPresentationSettings,
 }: MenuBarProps = {}) {
-  const { activeView, setActiveView, currentPresentation, setCurrentPresentation, setShowWelcomeScreen } = useAppStore()
+  const { activeView, setActiveView, currentPresentation } = useAppStore()
 
+  const navigate = useNavigate()
+  
   const handleClosePresentation = () => {
     if (confirm('Are you sure you want to close the current presentation?')) {
       import('@/store/useChatStore').then(({ useChatStore }) => {
         useChatStore.getState().clearMessages()
       })
-      setCurrentPresentation(null)
-      setShowWelcomeScreen(true)
+      // Clear localStorage to prevent auto-reopening
+      localStorage.removeItem('deckbot_current_presentation')
+      localStorage.removeItem('deckbot_current_slide')
+      // Navigate to home
+      navigate('/')
     }
   }
 
@@ -98,7 +139,7 @@ export function MenuBar({
   }
 
   return (
-    <div className="h-10 border-b border-border bg-card flex items-center justify-between px-4 select-none">
+    <div className="h-10 border-b border-border bg-background flex items-center justify-between px-4 select-none">
       <div className="flex items-center gap-3">
         <MenuItem label="DeckBot">
           <DropdownItem icon={<Info className="w-4 h-4" />} onClick={handleAbout}>
@@ -296,4 +337,5 @@ function ThemeSelector() {
     </div>
   )
 }
+
 

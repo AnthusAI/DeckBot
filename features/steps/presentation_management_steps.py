@@ -11,7 +11,8 @@ def step_impl(context, name, timestamp):
     manager = PresentationManager(root_dir=context.temp_dir)
     manager.create_presentation(name, "Test description")
     # Manually update timestamp
-    path = os.path.join(context.temp_dir, name, "metadata.json")
+    # PresentationManager creates presentations in /presentations subdirectory
+    path = os.path.join(context.temp_dir, 'presentations', name, "metadata.json")
     with open(path, 'r+') as f:
         data = json.load(f)
         data['created_at'] = timestamp

@@ -1,24 +1,30 @@
 import os
 from behave import given, when, then
 from deckbot.tools import PresentationTools
+from deckbot.manager import PresentationManager
 from unittest.mock import MagicMock
 
 @given('I have a file "{filename}" with content "{content}"')
 def step_impl(context, filename, content):
-    # Ensure presentation dir exists
+    # Create presentation if it doesn't exist
     if not hasattr(context, 'presentation_dir'):
-        context.presentation_dir = os.path.join(context.temp_dir, "test-deck")
-        os.makedirs(context.presentation_dir, exist_ok=True)
-        
+        manager = PresentationManager(root_dir=context.temp_dir)
+        manager.create_presentation("test-deck", "Test presentation")
+        pres = manager.get_presentation("test-deck")
+        dir_name = pres.get('_dir_name', 'test-deck')
+        context.presentation_dir = os.path.join(context.temp_dir, 'presentations', dir_name)
+
     file_path = os.path.join(context.presentation_dir, filename)
     # Create parent directories if filename contains subdirectory
     os.makedirs(os.path.dirname(file_path), exist_ok=True)
     with open(file_path, "w") as f:
         f.write(content)
-        
+
     # Initialize tools if not already
     if not hasattr(context, 'tools'):
-        context.tools = PresentationTools({'name': 'test-deck'}, MagicMock())
+        manager = PresentationManager(root_dir=context.temp_dir)
+        pres = manager.get_presentation("test-deck")
+        context.tools = PresentationTools(pres, MagicMock(), root_dir=context.temp_dir)
 
 @given('I have a file "{filename}"')
 def step_impl(context, filename):
@@ -85,17 +91,22 @@ def step_impl(context):
 
 @given('I have a subdirectory "{dirname}"')
 def step_impl(context, dirname):
-    # Ensure presentation dir exists
+    # Create presentation if it doesn't exist
     if not hasattr(context, 'presentation_dir'):
-        context.presentation_dir = os.path.join(context.temp_dir, "test-deck")
-        os.makedirs(context.presentation_dir, exist_ok=True)
-    
+        manager = PresentationManager(root_dir=context.temp_dir)
+        manager.create_presentation("test-deck", "Test presentation")
+        pres = manager.get_presentation("test-deck")
+        dir_name = pres.get('_dir_name', 'test-deck')
+        context.presentation_dir = os.path.join(context.temp_dir, 'presentations', dir_name)
+
     dir_path = os.path.join(context.presentation_dir, dirname)
     os.makedirs(dir_path, exist_ok=True)
-    
+
     # Initialize tools if not already
     if not hasattr(context, 'tools'):
-        context.tools = PresentationTools({'name': 'test-deck'}, MagicMock())
+        manager = PresentationManager(root_dir=context.temp_dir)
+        pres = manager.get_presentation("test-deck")
+        context.tools = PresentationTools(pres, MagicMock(), root_dir=context.temp_dir)
 
 @when('the agent calls list_files()')
 def step_impl(context):

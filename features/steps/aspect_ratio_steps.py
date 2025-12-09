@@ -11,7 +11,11 @@ def step_impl(context, name):
     context.manager = manager
     manager.create_presentation(name)
     context.presentation_name = name
-    context.presentation_dir = os.path.join(context.temp_dir, name)
+    # PresentationManager creates presentations in /presentations subdirectory
+    # Get the presentation to access its encoded directory name
+    pres = manager.get_presentation(name)
+    dir_name = pres.get('_dir_name', name)
+    context.presentation_dir = os.path.join(context.temp_dir, 'presentations', dir_name)
 
 @given('I have a presentation for aspect ratio testing named "{name}"')
 def step_impl(context, name):
@@ -20,7 +24,11 @@ def step_impl(context, name):
     if not manager.get_presentation(name):
         manager.create_presentation(name)
     context.presentation_name = name
-    context.presentation_dir = os.path.join(context.temp_dir, name)
+    # PresentationManager creates presentations in /presentations subdirectory
+    # Get the presentation to access its encoded directory name
+    pres = manager.get_presentation(name)
+    dir_name = pres.get('_dir_name', name)
+    context.presentation_dir = os.path.join(context.temp_dir, 'presentations', dir_name)
     
     # Setup tools
     pres_context = manager.get_presentation(name)
@@ -62,7 +70,11 @@ def step_impl(context, name, ratio):
 
 @then('the presentation "{name}" marp file should contain "{text}"')
 def step_impl(context, name, text):
-    path = os.path.join(context.temp_dir, name, "deck.marp.md")
+    # PresentationManager creates presentations in /presentations subdirectory
+    # Get the presentation to access its encoded directory name
+    pres = context.manager.get_presentation(name)
+    dir_name = pres.get('_dir_name', name)
+    path = os.path.join(context.temp_dir, 'presentations', dir_name, "deck.marp.md")
     with open(path, "r") as f:
         content = f.read()
     assert text in content

@@ -1,6 +1,7 @@
 from behave import given, when, then
 import os
 from deckbot.tools import PresentationTools
+from deckbot.manager import PresentationManager
 from unittest.mock import MagicMock
 
 # Reuse context setup logic if needed, or assume it's set up by other steps
@@ -14,12 +15,16 @@ def step_impl(context, name):
         # Fallback if not running in full test harness
         import tempfile
         context.temp_dir = tempfile.mkdtemp()
-        
-    context.presentation_dir = os.path.join(context.temp_dir, name)
-    os.makedirs(context.presentation_dir, exist_ok=True)
-    
+
+    # Use PresentationManager to create the presentation properly
+    manager = PresentationManager(root_dir=context.temp_dir)
+    manager.create_presentation(name, "Test presentation for validation")
+    pres = manager.get_presentation(name)
+    dir_name = pres.get('_dir_name', name)
+    context.presentation_dir = os.path.join(context.temp_dir, 'presentations', dir_name)
+
     # Initialize tools
-    context.tools = PresentationTools({'name': name}, MagicMock(), root_dir=context.temp_dir)
+    context.tools = PresentationTools(pres, MagicMock(), root_dir=context.temp_dir)
 
 @when('I update "{filename}" with the following content:')
 def step_impl(context, filename):

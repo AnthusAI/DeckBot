@@ -12,47 +12,32 @@ def step_impl(context, name):
 
 @given('the presentation contains an empty file "{filename}"')
 def step_impl(context, filename):
-    path = os.path.join(context.temp_dir, "test-deck", filename)
+    manager = PresentationManager(root_dir=context.temp_dir)
+    pres_name = getattr(context, 'current_presentation_name', 'test-deck')
+    pres = manager.get_presentation(pres_name)
+    dir_name = pres.get('_dir_name', pres_name)
+    path = os.path.join(context.temp_dir, 'presentations', dir_name, filename)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, 'w') as f:
         f.write("") # Empty file
 
 @given('the presentation contains a file "{filename}" with content "{content}"')
 def step_impl(context, filename, content):
-    # Use 'context.current_presentation_name' if set, else default to 'test-deck'
-    # But the previous step 'Given I have a presentation named "{name}"' doesn't set 'current_presentation_name'
-    # in this file. It creates it on disk.
-    # We need to find which presentation we are talking about.
-    # Usually "Given I have a presentation named 'X'" sets up X.
-    # If multiple exist, this step is ambiguous unless we track the "active" one.
-    
-    # Let's assume the most recently created one or try to infer from scenario?
-    # Or just check if "test-deck" exists, if not check others.
-    
-    presentation_name = "test-deck" # Default
-    
-    # Check if we have explicit name in context
-    if hasattr(context, 'current_presentation_name'):
-        presentation_name = context.current_presentation_name
-    # Else check directories in temp_dir
-    elif os.path.exists(os.path.join(context.temp_dir, "test-deck")):
-        presentation_name = "test-deck"
-    else:
-        # Find first dir that looks like a presentation
-        dirs = [d for d in os.listdir(context.temp_dir) if os.path.isdir(os.path.join(context.temp_dir, d))]
-        if dirs:
-            presentation_name = dirs[0]
-
-    path = os.path.join(context.temp_dir, presentation_name, filename)
-    # Ensure parent dir exists (for nested files if any, though usually root)
+    manager = PresentationManager(root_dir=context.temp_dir)
+    pres_name = getattr(context, 'current_presentation_name', 'test-deck')
+    pres = manager.get_presentation(pres_name)
+    dir_name = pres.get('_dir_name', pres_name)
+    path = os.path.join(context.temp_dir, 'presentations', dir_name, filename)
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    
+
     with open(path, 'w') as f:
         f.write(content)
 
 @when('the agent uses the "list_files" tool')
 def step_impl(context):
     manager = PresentationManager(root_dir=context.temp_dir)
-    presentation = manager.get_presentation("test-deck")
+    pres_name = getattr(context, 'current_presentation_name', 'test-deck')
+    presentation = manager.get_presentation(pres_name)
     tools = PresentationTools(presentation, MagicMock())
     context.tool_result = tools.list_files()
 
@@ -63,7 +48,8 @@ def step_impl(context, filename):
 @when('the agent uses the "read_file" tool for "{filename}"')
 def step_impl(context, filename):
     manager = PresentationManager(root_dir=context.temp_dir)
-    presentation = manager.get_presentation("test-deck")
+    pres_name = getattr(context, 'current_presentation_name', 'test-deck')
+    presentation = manager.get_presentation(pres_name)
     tools = PresentationTools(presentation, MagicMock())
     context.tool_result = tools.read_file(filename)
 
@@ -74,18 +60,27 @@ def step_impl(context, content):
 @when('the agent uses the "write_file" tool for "{filename}" with content "{content}"')
 def step_impl(context, filename, content):
     manager = PresentationManager(root_dir=context.temp_dir)
-    presentation = manager.get_presentation("test-deck")
+    pres_name = getattr(context, 'current_presentation_name', 'test-deck')
+    presentation = manager.get_presentation(pres_name)
     tools = PresentationTools(presentation, MagicMock())
     context.tool_result = tools.write_file(filename, content)
 
 @then('the file "{filename}" should exist in the presentation')
 def step_impl(context, filename):
-    path = os.path.join(context.temp_dir, "test-deck", filename)
+    manager = PresentationManager(root_dir=context.temp_dir)
+    pres_name = getattr(context, 'current_presentation_name', 'test-deck')
+    pres = manager.get_presentation(pres_name)
+    dir_name = pres.get('_dir_name', pres_name)
+    path = os.path.join(context.temp_dir, 'presentations', dir_name, filename)
     assert os.path.exists(path)
 
 @then('the content of "{filename}" should match "{content}"')
 def step_impl(context, filename, content):
-    path = os.path.join(context.temp_dir, "test-deck", filename)
+    manager = PresentationManager(root_dir=context.temp_dir)
+    pres_name = getattr(context, 'current_presentation_name', 'test-deck')
+    pres = manager.get_presentation(pres_name)
+    dir_name = pres.get('_dir_name', pres_name)
+    path = os.path.join(context.temp_dir, 'presentations', dir_name, filename)
     with open(path, 'r') as f:
         assert f.read() == content
 

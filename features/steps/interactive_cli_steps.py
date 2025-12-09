@@ -35,15 +35,15 @@ def step_impl(context, selection):
 def step_impl(context, name):
     with patch('deckbot.cli.start_repl') as mock_repl:
         # We expect Prompt.ask for "No presentations found. Create one?" -> "y"
-        # Then Name
+        # Then Name (no template prompt if templates directory is empty)
         # Then Description
         with patch('rich.prompt.Prompt.ask') as mock_prompt:
-            # If directory is empty, it asks "Create one? [y/n]" first
-            # Then "Select template" -> "n" (if templates exist)
-            # Then Name
-            # Then Description
-            mock_prompt.side_effect = ["y", "n", name, "Interactive creation"]
-            
+            # If directory is empty (no templates), sequence is:
+            # 1. "Create one? [y/n]" -> "y"
+            # 2. "Enter presentation name" -> name
+            # 3. "Enter description" -> description
+            mock_prompt.side_effect = ["y", name, "Interactive creation"]
+
             context.runner.invoke(cli, args=['--text'], env={'VIBE_PRESENTATION_ROOT': context.temp_dir})
             context.mock_repl = mock_repl
 

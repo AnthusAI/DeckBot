@@ -33,7 +33,8 @@ class PreferencesManager:
         if not os.path.exists(self.config_path):
             defaults = {
                 'theme': 'system',
-                'color_theme': 'miami'  # Default color theme
+                'color_theme': 'miami',  # Default color theme
+                'content_folder': os.path.expanduser('~/.deckbot')  # Default content folder
             }
             self._write_config(defaults)
     

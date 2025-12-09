@@ -37,6 +37,7 @@ Feature: Slash Commands
     And the response should stream via SSE
     And fast mode should remain on
 
+  @wip
   Scenario: Export presentation to PDF
     Given the presentation contains a file "deck.marp.md" with content "# Title Slide"
     And Marp CLI is available

@@ -158,7 +158,10 @@ def step_impl(context):
 @then('the presentation "{name}" should have a "layouts.md" file')
 def step_impl(context, name):
     """Check that layouts.md exists."""
-    layouts_path = os.path.join(context.temp_dir, name, "layouts.md")
+    manager = PresentationManager(root_dir=context.temp_dir)
+    pres = manager.get_presentation(name)
+    dir_name = pres.get('_dir_name', name)
+    layouts_path = os.path.join(context.temp_dir, 'presentations', dir_name, "layouts.md")
     assert os.path.exists(layouts_path), f"layouts.md not found in {name}"
     context.layouts_path = layouts_path
 
@@ -249,7 +252,10 @@ def step_impl(context):
 @then('the agent\'s system instructions should include "{text}"')
 def step_impl(context, text):
     """Check agent instructions."""
-    pres_dir = os.path.join(context.temp_dir, context.current_presentation)
+    manager = PresentationManager(root_dir=context.temp_dir)
+    pres = manager.get_presentation(context.current_presentation)
+    dir_name = pres.get('_dir_name', context.current_presentation)
+    pres_dir = os.path.join(context.temp_dir, 'presentations', dir_name)
     agent = Agent(pres_dir, web_mode=False)
     instructions = agent.get_instructions()
     assert text in instructions, f"'{text}' not in agent instructions"

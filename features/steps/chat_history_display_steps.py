@@ -1,11 +1,22 @@
 from behave import given, when, then
 import os
 import json
+from deckbot.manager import PresentationManager
+
+def _get_history_file_path(context, pres_name):
+    """Helper to get correct history file path with encoded directory name"""
+    manager = PresentationManager(root_dir=context.temp_dir)
+    # Ensure presentation exists
+    if not manager.get_presentation(pres_name):
+        manager.create_presentation(pres_name)
+    pres = manager.get_presentation(pres_name)
+    dir_name = pres.get('_dir_name', pres_name)
+    return os.path.join(context.temp_dir, 'presentations', dir_name, "chat_history.jsonl")
 
 @given('the presentation has chat history with text messages')
 def step_impl(context):
     pres_name = "history-display-test"
-    history_file = os.path.join(context.temp_dir, pres_name, "chat_history.jsonl")
+    history_file = _get_history_file_path(context, pres_name)
     
     messages = [
         {"role": "user", "content": "Create a slide about AI"},
@@ -21,7 +32,7 @@ def step_impl(context):
 @given('the presentation has chat history with tool calls')
 def step_impl(context):
     pres_name = "tool-history-test"
-    history_file = os.path.join(context.temp_dir, pres_name, "chat_history.jsonl")
+    history_file = _get_history_file_path(context, pres_name)
     
     messages = [
         {"role": "user", "content": "Write a file"},
@@ -37,7 +48,7 @@ def step_impl(context):
 @given('the presentation has chat history with:')
 def step_impl(context):
     pres_name = "mixed-history-test"
-    history_file = os.path.join(context.temp_dir, pres_name, "chat_history.jsonl")
+    history_file = _get_history_file_path(context, pres_name)
     
     messages = []
     for row in context.table:
@@ -134,7 +145,7 @@ def step_impl(context):
 @given('the presentation has an image request in chat history')
 def step_impl(context):
     pres_name = "image-history-test"
-    history_file = os.path.join(context.temp_dir, pres_name, "chat_history.jsonl")
+    history_file = _get_history_file_path(context, pres_name)
     
     message = {
         "role": "system",
@@ -155,7 +166,7 @@ def step_impl(context):
 @given('the presentation has 4 image candidates in chat history')
 def step_impl(context):
     pres_name = "image-candidates-test"
-    history_file = os.path.join(context.temp_dir, pres_name, "chat_history.jsonl")
+    history_file = _get_history_file_path(context, pres_name)
     
     with open(history_file, 'w') as f:
         for i in range(4):
@@ -174,7 +185,7 @@ def step_impl(context):
 @given('the presentation has image candidates in chat history')
 def step_impl(context):
     pres_name = "image-selection-test"
-    history_file = os.path.join(context.temp_dir, pres_name, "chat_history.jsonl")
+    history_file = _get_history_file_path(context, pres_name)
     
     with open(history_file, 'w') as f:
         # Add candidates
@@ -194,7 +205,7 @@ def step_impl(context):
 @given('the presentation has an image selection in chat history')
 def step_impl(context):
     pres_name = "image-selection-test"
-    history_file = os.path.join(context.temp_dir, pres_name, "chat_history.jsonl")
+    history_file = _get_history_file_path(context, pres_name)
     
     message = {
         "role": "system",
@@ -214,7 +225,7 @@ def step_impl(context):
 @given('the presentation has an agent request in chat history')
 def step_impl(context):
     pres_name = "agent-request-test"
-    history_file = os.path.join(context.temp_dir, pres_name, "chat_history.jsonl")
+    history_file = _get_history_file_path(context, pres_name)
     
     message = {
         "role": "user",

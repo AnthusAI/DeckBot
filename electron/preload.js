@@ -6,6 +6,9 @@ const { contextBridge, ipcRenderer } = require('electron');
  * specific, safe methods to the frontend.
  */
 
+// Set a flag immediately so Electron detection works reliably
+contextBridge.exposeInMainWorld('__DECKBOT_ELECTRON__', true);
+
 contextBridge.exposeInMainWorld('electronAPI', {
   /**
    * Get the backend API URL
@@ -25,4 +28,40 @@ contextBridge.exposeInMainWorld('electronAPI', {
    * @returns {Promise<Object>} Dialog result
    */
   showSaveDialog: (options) => ipcRenderer.invoke('show-save-dialog', options),
+
+  /**
+   * Show an open dialog (for folder/file selection)
+   * @param {Object} options - Dialog options
+   * @returns {Promise<Object>} Dialog result
+   */
+  showOpenDialog: (options) => ipcRenderer.invoke('show-open-dialog', options),
+
+  /**
+   * Open a presentation in a new window
+   * @param {string} presentationName - Name of the presentation
+   * @returns {Promise<Object>} Result with success flag
+   */
+  openPresentationWindow: (presentationName) => ipcRenderer.invoke('open-presentation-window', presentationName),
+
+  /**
+   * Open a new window with a specific route
+   * @param {string} route - Route to load (e.g., '/' or '/presentation/MyDeck')
+   * @returns {Promise<Object>} Result with success flag
+   */
+  openNewWindow: (route) => ipcRenderer.invoke('open-new-window', route),
+
+  /**
+   * Listen for menu actions from the native menu
+   * @param {Function} callback - Callback function that receives the action name
+   */
+  onMenuAction: (callback) => {
+    ipcRenderer.on('menu-action', (event, action) => callback(action));
+  },
+
+  /**
+   * Remove menu action listener
+   */
+  removeMenuActionListener: () => {
+    ipcRenderer.removeAllListeners('menu-action');
+  },
 });

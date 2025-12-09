@@ -91,7 +91,12 @@ def step_impl(context, command):
 
 @then('a new directory "{dirname}" should be created')
 def step_impl(context, dirname):
-    path = os.path.join(context.temp_dir, dirname)
+    # PresentationManager creates presentations with encoded names
+    manager = PresentationManager(root_dir=context.temp_dir)
+    pres = manager.get_presentation(dirname)
+    assert pres is not None, f"Presentation {dirname} not found"
+    dir_name = pres.get('_dir_name', dirname)
+    path = os.path.join(context.temp_dir, 'presentations', dir_name)
     assert os.path.exists(path), f"Directory {path} does not exist"
     assert os.path.isdir(path), f"{path} is not a directory"
 

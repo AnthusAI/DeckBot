@@ -57,3 +57,5 @@ export const useChatStore = create<ChatState>((set) => ({
   setCurrentBatchSlug: (slug) => set({ currentBatchSlug: slug }),
 }))
 
+
+

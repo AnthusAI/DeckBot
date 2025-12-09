@@ -70,14 +70,16 @@ def step_impl(context, prompt):
 
 @given('the presentation "{name}" has history')
 def step_impl(context, name):
-    pres_dir = os.path.join(context.temp_dir, name)
-    os.makedirs(pres_dir, exist_ok=True)
-    
-    # Create metadata.json so the presentation is recognized
-    metadata_file = os.path.join(pres_dir, "metadata.json")
-    with open(metadata_file, "w") as f:
-        json.dump({"name": name, "description": "Test presentation"}, f)
-    
+    from deckbot.manager import PresentationManager
+    manager = PresentationManager(root_dir=context.temp_dir)
+    # Create presentation if it doesn't exist
+    if not manager.get_presentation(name):
+        manager.create_presentation(name, description="Test presentation")
+
+    pres = manager.get_presentation(name)
+    dir_name = pres.get('_dir_name', name)
+    pres_dir = os.path.join(context.temp_dir, 'presentations', dir_name)
+
     # Create history file
     history_file = os.path.join(pres_dir, "chat_history.jsonl")
     with open(history_file, "w") as f:

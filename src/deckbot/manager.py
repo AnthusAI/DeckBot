@@ -4,42 +4,56 @@ import time
 import re
 import yaml
 from datetime import datetime
+from urllib.parse import quote, unquote
+
+def encode_presentation_name(name):
+    """Encode presentation name for use as directory name."""
+    return quote(name, safe='')
+
+def decode_presentation_name(encoded_name):
+    """Decode directory name back to presentation name."""
+    return unquote(encoded_name)
 
 class PresentationManager:
     def __init__(self, root_dir=None):
         if root_dir:
+            # Explicit root_dir for tests or API calls
             self.root_dir = root_dir
+        elif os.getenv('VIBE_PRESENTATION_ROOT'):
+            # Environment variable for test isolation
+            self.root_dir = os.getenv('VIBE_PRESENTATION_ROOT')
         else:
-            # Priority order: DECKBOT_PRESENTATION_ROOT env var, local presentations/ folder, ~/.deckbot
-            env_root = os.environ.get('DECKBOT_PRESENTATION_ROOT')
-            if env_root:
-                self.root_dir = env_root
+            # Load from preferences
+            from deckbot.preferences import PreferencesManager
+            prefs = PreferencesManager()
+            content_folder = prefs.get('content_folder')
+
+            if content_folder:
+                self.root_dir = os.path.expanduser(content_folder)
             else:
-                local_presentations = os.path.abspath("presentations")
-                if os.path.exists(local_presentations):
-                    self.root_dir = local_presentations
-                else:
-                    self.root_dir = os.path.expanduser("~/.deckbot")
-        
+                self.root_dir = os.path.expanduser('~/.deckbot')
+
+        # Ensure directory exists
         if not os.path.exists(self.root_dir):
             os.makedirs(self.root_dir)
-        
-        # Templates directory
-        # 1. Check inside root_dir (useful for tests or self-contained storage)
-        internal_templates = os.path.join(self.root_dir, "templates")
-        if os.path.exists(internal_templates):
-             self.templates_dir = internal_templates
-        else:
-             # 2. Check local templates folder (useful for repo usage)
-             local_templates = os.path.abspath("templates")
-             if os.path.exists(local_templates):
-                 self.templates_dir = local_templates
-             else:
-                 # Default back to internal
-                 self.templates_dir = internal_templates
+
+        # Presentations in <root_dir>/presentations
+        self.presentations_dir = os.path.join(self.root_dir, "presentations")
+        if not os.path.exists(self.presentations_dir):
+            os.makedirs(self.presentations_dir)
+
+        # Templates in <root_dir>/templates
+        self.templates_dir = os.path.join(self.root_dir, "templates")
+        if not os.path.exists(self.templates_dir):
+            os.makedirs(self.templates_dir)
+
+        # DEBUG: Print what path we're using
+        print(f"[PresentationManager] Using root_dir: {self.root_dir}")
+        print(f"[PresentationManager] Presentations dir: {self.presentations_dir}")
 
     def create_presentation(self, name, description="", template=None):
-        presentation_dir = os.path.join(self.root_dir, name)
+        encoded_name = encode_presentation_name(name)
+        presentation_dir = os.path.join(self.presentations_dir, encoded_name)
         if os.path.exists(presentation_dir):
             raise ValueError(f"Presentation '{name}' already exists.")
         
@@ -84,6 +98,7 @@ class PresentationManager:
                 "name": name,
                 "description": description,
                 "aspect_ratio": aspect_ratio,
+                "_dir_name": encoded_name,  # Add encoded directory name
                 "created_at": datetime.now().isoformat(),
                 "updated_at": datetime.now().isoformat()
             })
@@ -151,6 +166,17 @@ class PresentationManager:
             # Copy system images based on template metadata
             include_system_images = metadata.get('include_system_images', None)
             self._copy_system_images(presentation_dir, include_system_images)
+            
+            # Copy marp.config.js if template has it, otherwise copy from default
+            template_config = os.path.join(template_path, "marp.config.js")
+            presentation_config = os.path.join(presentation_dir, "marp.config.js")
+            if os.path.exists(template_config):
+                shutil.copy2(template_config, presentation_config)
+            else:
+                # Copy default marp.config.js from templates root
+                default_config = os.path.join(self.templates_dir, "marp.config.js")
+                if os.path.exists(default_config):
+                    shutil.copy2(default_config, presentation_config)
                 
             return metadata
         else:
@@ -161,6 +187,7 @@ class PresentationManager:
                 "name": name,
                 "description": description,
                 "aspect_ratio": aspect_ratio,
+                "_dir_name": encoded_name,  # Add encoded directory name
                 "created_at": datetime.now().isoformat(),
                 "updated_at": datetime.now().isoformat()
             }
@@ -194,6 +221,13 @@ paginate: true
             
             # Copy system placeholder images
             self._copy_system_images(presentation_dir)
+            
+            # Copy default marp.config.js for diagram support
+            import shutil
+            default_config = os.path.join(self.templates_dir, "marp.config.js")
+            presentation_config = os.path.join(presentation_dir, "marp.config.js")
+            if os.path.exists(default_config):
+                shutil.copy2(default_config, presentation_config)
             
             return metadata
 
@@ -435,43 +469,66 @@ paginate: true
 
     def list_presentations(self):
         presentations = []
-        if not os.path.exists(self.root_dir):
+        if not os.path.exists(self.presentations_dir):
             return []
-            
-        for name in os.listdir(self.root_dir):
-            path = os.path.join(self.root_dir, name)
+
+        for dir_name in os.listdir(self.presentations_dir):
+            path = os.path.join(self.presentations_dir, dir_name)
             if os.path.isdir(path):
                 metadata_path = os.path.join(path, "metadata.json")
                 if os.path.exists(metadata_path):
                     try:
                         with open(metadata_path, "r") as f:
                             metadata = json.load(f)
-                            # Ensure name matches directory name to avoid deletion issues
-                            metadata['name'] = name
+                            # Store the directory name for lookups
+                            metadata['_dir_name'] = dir_name
                             presentations.append(metadata)
                     except json.JSONDecodeError:
                         continue
-        
+
         # Sort by created_at desc
         presentations.sort(key=lambda x: x.get('created_at', ''), reverse=True)
         return presentations
 
     def get_presentation(self, name):
-        path = os.path.join(self.root_dir, name)
-        if not os.path.exists(path):
-            return None
-        
-        metadata_path = os.path.join(path, "metadata.json")
-        if os.path.exists(metadata_path):
-            with open(metadata_path, "r") as f:
-                return json.load(f)
+        # First try: look for a directory with the exact name
+        path = os.path.join(self.presentations_dir, name)
+        if os.path.exists(path):
+            metadata_path = os.path.join(path, "metadata.json")
+            if os.path.exists(metadata_path):
+                with open(metadata_path, "r") as f:
+                    metadata = json.load(f)
+                    # Add _dir_name to match list_presentations behavior
+                    metadata['_dir_name'] = name
+                    return metadata
+
+        # Second try: look for a directory with encoded name
+        encoded_name = encode_presentation_name(name)
+        path = os.path.join(self.presentations_dir, encoded_name)
+        if os.path.exists(path):
+            metadata_path = os.path.join(path, "metadata.json")
+            if os.path.exists(metadata_path):
+                with open(metadata_path, "r") as f:
+                    metadata = json.load(f)
+                    # Add _dir_name to match list_presentations behavior
+                    metadata['_dir_name'] = encoded_name
+                    return metadata
+
+        # Third try: search through all presentations to find by metadata name
+        all_presentations = self.list_presentations()
+        for pres in all_presentations:
+            if pres.get('name') == name:
+                # Found it - return with directory name attached
+                return pres
+
         return None
 
     def delete_presentation(self, name):
-        path = os.path.join(self.root_dir, name)
+        encoded_name = encode_presentation_name(name)
+        path = os.path.join(self.presentations_dir, encoded_name)
         if not os.path.exists(path):
             raise FileNotFoundError(f"Presentation '{name}' not found.")
-        
+
         import shutil
         shutil.rmtree(path)
         return True
@@ -493,7 +550,8 @@ paginate: true
         return '4:3'
 
     def set_presentation_aspect_ratio(self, name, aspect_ratio):
-        path = os.path.join(self.root_dir, name)
+        encoded_name = encode_presentation_name(name)
+        path = os.path.join(self.presentations_dir, encoded_name)
         if not os.path.exists(path):
             raise ValueError(f"Presentation '{name}' not found.")
             
@@ -539,7 +597,8 @@ paginate: true
     
     def set_presentation_title(self, name, title):
         """Update the presentation title in both metadata.json and deck.marp.md front matter."""
-        path = os.path.join(self.root_dir, name)
+        encoded_name = encode_presentation_name(name)
+        path = os.path.join(self.presentations_dir, encoded_name)
         if not os.path.exists(path):
             raise ValueError(f"Presentation '{name}' not found.")
         
@@ -590,7 +649,8 @@ paginate: true
     
     def set_presentation_description(self, name, description):
         """Update the presentation description in both metadata.json and deck.marp.md front matter."""
-        path = os.path.join(self.root_dir, name)
+        encoded_name = encode_presentation_name(name)
+        path = os.path.join(self.presentations_dir, encoded_name)
         if not os.path.exists(path):
             raise ValueError(f"Presentation '{name}' not found.")
         
@@ -641,7 +701,8 @@ paginate: true
     
     def set_presentation_color_settings(self, name, color_settings):
         """Update the presentation color settings in metadata.json."""
-        path = os.path.join(self.root_dir, name)
+        encoded_name = encode_presentation_name(name)
+        path = os.path.join(self.presentations_dir, encoded_name)
         if not os.path.exists(path):
             raise ValueError(f"Presentation '{name}' not found.")
         
@@ -662,7 +723,8 @@ paginate: true
     
     def set_presentation_font_settings(self, name, font_settings):
         """Update the presentation font settings in metadata.json."""
-        path = os.path.join(self.root_dir, name)
+        encoded_name = encode_presentation_name(name)
+        path = os.path.join(self.presentations_dir, encoded_name)
         if not os.path.exists(path):
             raise ValueError(f"Presentation '{name}' not found.")
         
@@ -682,20 +744,22 @@ paginate: true
         return self.get_presentation(name)
     
     def duplicate_presentation(self, source_name, new_name, description=None, copy_images=True):
-        source_path = os.path.join(self.root_dir, source_name)
-        
+        encoded_source = encode_presentation_name(source_name)
+        source_path = os.path.join(self.presentations_dir, encoded_source)
+
         if not os.path.exists(source_path):
             raise ValueError(f"Source presentation '{source_name}' not found.")
-        
+
         # Auto-increment folder name if it already exists
         # The folder name can differ from the metadata name
-        folder_name = new_name
+        encoded_new = encode_presentation_name(new_name)
+        folder_name = encoded_new
         counter = 2
-        while os.path.exists(os.path.join(self.root_dir, folder_name)):
-            folder_name = f"{new_name} {counter}"
+        while os.path.exists(os.path.join(self.presentations_dir, folder_name)):
+            folder_name = encode_presentation_name(f"{new_name} {counter}")
             counter += 1
-        
-        new_path = os.path.join(self.root_dir, folder_name)
+
+        new_path = os.path.join(self.presentations_dir, folder_name)
             
         import shutil
         

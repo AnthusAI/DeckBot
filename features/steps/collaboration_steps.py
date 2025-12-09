@@ -11,12 +11,16 @@ def step_impl(context, filename, content):
         manager = PresentationManager(root_dir=context.temp_dir)
         context.presentation_name = "collab-deck"
         manager.create_presentation(context.presentation_name, "Test Deck")
-        context.presentation_dir = os.path.join(context.temp_dir, context.presentation_name)
-        
+
+        # Get the encoded directory name
+        pres = manager.get_presentation(context.presentation_name)
+        dir_name = pres.get('_dir_name', context.presentation_name)
+        context.presentation_dir = os.path.join(context.temp_dir, 'presentations', dir_name)
+
         # Initialize SessionService
-        context.service = SessionService({'name': context.presentation_name})
+        context.service = SessionService(pres)
         context.service.agent.presentation_dir = context.presentation_dir
-        
+
         # Capture events
         context.events = []
         def listener(event_type, data):
@@ -25,6 +29,7 @@ def step_impl(context, filename, content):
 
     # Write the initial file
     file_path = os.path.join(context.presentation_dir, filename)
+    os.makedirs(os.path.dirname(file_path), exist_ok=True)
     with open(file_path, "w") as f:
         f.write(content)
 

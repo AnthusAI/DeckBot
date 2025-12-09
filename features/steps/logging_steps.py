@@ -33,16 +33,20 @@ def step_impl(context, name):
 
 @given('the presentation has chat history:')
 def step_impl(context):
+    from deckbot.manager import PresentationManager
     # Find the presentation name from context
     if hasattr(context, 'real_agent'):
         pres_name = context.real_agent.context['name']
     else:
         # Infer from scenario - use a reasonable default
         pres_name = "resume-context-test"
-    
-    presentation_dir = os.path.join(context.temp_dir, pres_name)
+
+    manager = PresentationManager(root_dir=context.temp_dir)
+    pres = manager.get_presentation(pres_name)
+    dir_name = pres.get('_dir_name', pres_name)
+    presentation_dir = os.path.join(context.temp_dir, 'presentations', dir_name)
     history_file = os.path.join(presentation_dir, "chat_history.jsonl")
-    
+
     with open(history_file, 'w') as f:
         for row in context.table:
             entry = {
@@ -53,9 +57,14 @@ def step_impl(context):
 
 @given('the presentation contains a history file with a previous message "{message}"')
 def step_impl(context, message):
+    from deckbot.manager import PresentationManager
     # Use jsonl format
     entry = {"role": "user", "content": message}
-    path = os.path.join(context.temp_dir, "resume-test", "chat_history.jsonl")
+
+    manager = PresentationManager(root_dir=context.temp_dir)
+    pres = manager.get_presentation("resume-test")
+    dir_name = pres.get('_dir_name', "resume-test")
+    path = os.path.join(context.temp_dir, 'presentations', dir_name, "chat_history.jsonl")
     with open(path, 'w') as f:
         f.write(json.dumps(entry) + "\n")
 
@@ -71,19 +80,31 @@ def step_impl(context, name):
 
 @then('a "{filename}" file should exist in the presentation')
 def step_impl(context, filename):
-    path = os.path.join(context.temp_dir, "logging-test", filename)
+    from deckbot.manager import PresentationManager
+    manager = PresentationManager(root_dir=context.temp_dir)
+    pres = manager.get_presentation("logging-test")
+    dir_name = pres.get('_dir_name', "logging-test")
+    path = os.path.join(context.temp_dir, 'presentations', dir_name, filename)
     assert os.path.exists(path)
 
 @then('the history file should contain "{text}"')
 def step_impl(context, text):
-    path = os.path.join(context.temp_dir, "logging-test", "chat_history.jsonl")
+    from deckbot.manager import PresentationManager
+    manager = PresentationManager(root_dir=context.temp_dir)
+    pres = manager.get_presentation("logging-test")
+    dir_name = pres.get('_dir_name', "logging-test")
+    path = os.path.join(context.temp_dir, 'presentations', dir_name, "chat_history.jsonl")
     with open(path, 'r') as f:
         content = f.read()
     assert text in content
 
 @then('the history file should contain the AI response')
 def step_impl(context):
-    path = os.path.join(context.temp_dir, "logging-test", "chat_history.jsonl")
+    from deckbot.manager import PresentationManager
+    manager = PresentationManager(root_dir=context.temp_dir)
+    pres = manager.get_presentation("logging-test")
+    dir_name = pres.get('_dir_name', "logging-test")
+    path = os.path.join(context.temp_dir, 'presentations', dir_name, "chat_history.jsonl")
     with open(path, 'r') as f:
         content = f.read()
     # The mocked response in assistant_steps.py is "Sure, here is an outline."
