@@ -35,7 +35,64 @@ export function Message({ message }: MessageProps) {
   }
 
   const getContent = () => {
-    // Text message (most common case)
+    // Behavior: Messages with parts field (from history) should render their text content
+    // Given a message with a parts array containing text objects
+    // When the component renders
+    // Then it should extract and display all text content from the parts
+    if ('parts' in message && message.parts && Array.isArray(message.parts)) {
+      const texts = message.parts
+        .map((part: any) => part.text || '')
+        .filter((text: string) => text.length > 0)
+        .join('\n\n')
+
+      // Check for function calls/responses in parts
+      const functionCalls = message.parts.filter((part: any) => part.function_call)
+      const functionResponses = message.parts.filter((part: any) => part.function_response)
+
+      // If we have text content, render it
+      if (texts) {
+        const html = marked.parse(texts)
+        return (
+          <div
+            className="markdown-content"
+            dangerouslySetInnerHTML={{ __html: html }}
+          />
+        )
+      }
+
+      // If we have function calls/responses but no text, show them
+      if (functionCalls.length > 0 || functionResponses.length > 0) {
+        return (
+          <div className="space-y-2 text-sm">
+            {functionCalls.map((part: any, idx: number) => (
+              <div key={`call-${idx}`} className="space-y-1">
+                <div className="font-medium">Tool: {part.function_call.name}</div>
+                {part.function_call.args && (
+                  <pre className="text-xs opacity-70 overflow-x-auto">
+                    {JSON.stringify(part.function_call.args, null, 2)}
+                  </pre>
+                )}
+              </div>
+            ))}
+            {functionResponses.map((part: any, idx: number) => (
+              <div key={`response-${idx}`} className="space-y-1">
+                <div className="font-medium">Result from: {part.function_response.name}</div>
+                <div className="text-xs opacity-70">
+                  {typeof part.function_response.response === 'string'
+                    ? part.function_response.response
+                    : JSON.stringify(part.function_response.response, null, 2)}
+                </div>
+              </div>
+            ))}
+          </div>
+        )
+      }
+    }
+
+    // Behavior: Messages with content field should render as markdown
+    // Given a message with a content string
+    // When the component renders
+    // Then it should parse and display the content as markdown
     if ('content' in message && message.content) {
       const html = marked.parse(message.content)
       return (
@@ -45,8 +102,11 @@ export function Message({ message }: MessageProps) {
         />
       )
     }
-    
-    // Rich message - handle different types
+
+    // Behavior: Rich messages with message_type should render appropriately
+    // Given a message with a message_type field
+    // When the component renders
+    // Then it should render using the appropriate handler for that type
     if ('message_type' in message) {
       switch (message.message_type) {
         case 'image_candidate':
@@ -56,10 +116,24 @@ export function Message({ message }: MessageProps) {
         case 'tool_call':
           // Tool call messages should show the tool name and result
           if ('data' in message && message.data) {
+            const { tool_name, status, args, result } = message.data
             return (
               <div className="space-y-1">
-                <div className="font-medium">Used tool: {message.data.tool_name || 'Unknown'}</div>
-                {message.data.result && <div className="text-xs opacity-70">{message.data.result}</div>}
+                <div className="font-medium">
+                  {status === 'started' && '🔧 '}
+                  {status === 'completed' && '✓ '}
+                  Tool: {tool_name || message.data.tool || 'Unknown'}
+                </div>
+                {args && Object.keys(args).length > 0 && (
+                  <pre className="text-xs opacity-70 overflow-x-auto">
+                    {JSON.stringify(args, null, 2)}
+                  </pre>
+                )}
+                {result && (
+                  <div className="text-xs opacity-70 mt-1">
+                    Result: {typeof result === 'string' ? result : JSON.stringify(result, null, 2)}
+                  </div>
+                )}
               </div>
             )
           }
@@ -74,7 +148,9 @@ export function Message({ message }: MessageProps) {
           )
       }
     }
-    
+
+    // Fallback: return null for messages with no displayable content
+    // ChatHistory will filter these out
     return null
   }
 
@@ -149,6 +225,7 @@ function ImageRequestDetails({ data }: { data: any }) {
     </div>
   )
 }
+
 
 
 

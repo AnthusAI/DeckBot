@@ -245,3 +245,4 @@ def step_impl(context):
     assert 'diagram' in content.lower(), "HTML output does not contain diagram content"
 
 
+

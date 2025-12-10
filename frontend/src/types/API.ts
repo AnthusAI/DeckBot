@@ -119,6 +119,9 @@ export type SSEEventType =
   | 'presentation_updated'
   | 'tool_call'
   | 'tool_result'
+  | 'tool_start'
+  | 'tool_end'
+  | 'tool_error'
   | 'agent_request_details'
   | 'command_result'
   | 'command_error'
@@ -128,6 +131,7 @@ export interface SSEEvent {
   type: SSEEventType
   data: any
 }
+
 
 
 

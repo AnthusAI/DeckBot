@@ -56,14 +56,39 @@ export function useSSEIntegration() {
     window.dispatchEvent(new CustomEvent('presentation-updated'))
   })
 
-  // Handle tool calls (they come as system messages)
-  useEventSource('tool_call', () => {
-    // Tool calls are handled via regular messages
+  // Handle tool events
+  useEventSource('tool_start', (data: any) => {
+    addMessage({
+      role: 'system',
+      message_type: 'tool_call',
+      data: {
+        tool_name: data.tool,
+        status: 'started',
+        args: data.args,
+        call_id: data.call_id
+      }
+    } as any)
   })
 
-  // Handle tool results (they come as system messages)
-  useEventSource('tool_result', () => {
-    // Tool results are handled via regular messages
+  useEventSource('tool_end', (data: any) => {
+    addMessage({
+      role: 'system',
+      message_type: 'tool_call',
+      data: {
+        tool_name: data.tool,
+        status: 'completed',
+        result: data.result,
+        args: data.args,
+        call_id: data.call_id
+      }
+    } as any)
+  })
+
+  useEventSource('tool_error', (data: any) => {
+    addMessage({
+      role: 'system',
+      content: `Tool ${data.tool} failed: ${data.error}`
+    } as Message)
   })
 
   // Handle command results
@@ -96,6 +121,7 @@ export function useSSEIntegration() {
     } as Message)
   })
 }
+
 
 
 
