@@ -1,6 +1,71 @@
 # CHANGELOG
 
 
+## v1.1.0 (2025-12-09)
+
+### Features
+
+* feat: implement slash commands for enhanced user interaction
+
+- Added a new feature for slash commands to allow users to perform quick actions without AI interpretation.
+- Implemented commands such as `/fast` to toggle fast mode, `/export` to export presentations to PDF, `/help` for help information, and `/tools` to list available agent tools.
+- Enhanced the chat input component to handle slash commands and integrated command processing in the backend.
+- Updated the frontend to display command results and errors in real-time using SSE.
+- Added markdown styling for command responses and improved overall user experience with command handling. ([`6a6c8fc`](https://github.com/AnthusAI/DeckBot/commit/6a6c8fcd94d6171fc03d1e9b33c56b49b0353af5))
+
+* feat: convert web UI to React with profile-based secrets management
+
+Major overhaul of the web interface:
+
+- Converted entire frontend from vanilla JS to React/TypeScript with Vite
+- Implemented modern component architecture with Zustand state management
+- Added Tailwind CSS for consistent styling across all views
+- Integrated Monaco editor for code editing with syntax highlighting
+- Improved layouts view with working preview images
+
+New features:
+- Profile-based API key management system
+  - Store multiple API keys organized into named profiles
+  - Configure models per-profile (primary, secondary, image)
+  - Switch between profiles via UI (gear icon → API Keys)
+  - Automatic migration from .env to profiles
+  - Secrets stored in .deckbot.secrets.yaml (gitignored)
+- Added --port CLI option for custom server ports (default: 5555)
+- Dynamic backend URL configuration for flexible deployment
+
+Technical improvements:
+- Fixed layout preview generation using Marp CLI
+- Added proper error handling and loading states
+- Improved SSE (Server-Sent Events) connection management
+- Built frontend outputs to src/deckbot/static/dist for production serving
+
+🤖 Generated with [Claude Code](https://claude.ai/code)
+
+Co-Authored-By: Claude <noreply@anthropic.com> ([`e5456d7`](https://github.com/AnthusAI/DeckBot/commit/e5456d7a730779e316442613739967be47c97d5f))
+
+### Refactoring
+
+* refactor: remove fullscreen control script and related functionality
+
+- Removed the script that overrides Marp's fullscreen behavior in the web application.
+- Eliminated the fullscreen toggle function and its associated message listener in the JavaScript file.
+- Updated the chat template to remove the 'allowfullscreen' attribute from the iframe, simplifying the preview view setup. ([`4dab55e`](https://github.com/AnthusAI/DeckBot/commit/4dab55eaf0ea07841b228d859d1ef461af49265d))
+
+### Unknown
+
+* Lots of little tweaks from the last few days. ([`a1d9644`](https://github.com/AnthusAI/DeckBot/commit/a1d96449d2e661e780b3b5178254f7b1f773321f))
+
+* Added Electron app. ([`c45e804`](https://github.com/AnthusAI/DeckBot/commit/c45e804eeffc47ce00af6acb5de2d5677806e9ec))
+
+* Removed pure Javascript UI and cleaned up tests. ([`9b836c4`](https://github.com/AnthusAI/DeckBot/commit/9b836c4380cab338fdc9b2322fad4790281eb68b))
+
+* Oops. ([`7945a08`](https://github.com/AnthusAI/DeckBot/commit/7945a08716be899872f64292d15c69bf66258020))
+
+* Many tweaks. ([`28c3570`](https://github.com/AnthusAI/DeckBot/commit/28c3570b4ba3a25e040b84caec3015a174f33b6a))
+
+* Merge branch 'main' of github.com:AnthusAI/DeckBot ([`a811e1c`](https://github.com/AnthusAI/DeckBot/commit/a811e1c8d25a87713762f3d48634653d3563cb17))
+
+
 ## v1.0.0 (2025-12-01)
 
 ### Breaking
@@ -161,6 +226,16 @@ Previously, CI would have run @wip scenarios causing failures not seen locally. 
 
 ### Unknown
 
+* Lots of work from lots of nights here that I never committed.  Getting started tonight by committing stuff that works.
+
+- Added support for configurable primary and secondary models in `.deckbot.yaml`, with defaults set to `gemini-3-pro-preview` and `gemini-2.0-flash-exp`.
+- Implemented automatic fallback to the secondary model upon receiving a `429 RESOURCE_EXHAUSTED` error from the primary model.
+- Updated documentation in `AGENTS.md` and `README.md` to reflect new model configuration options.
+- Introduced new tests for the replace text tool and template deletion functionality in BDD features.
+- Enhanced the CLI with a new command to compile presentations to various formats.
+- Improved the web application with a code view and file management capabilities, including saving and serving files.
+- Added visual QA checks for slides to ensure presentation quality. ([`b7a7e08`](https://github.com/AnthusAI/DeckBot/commit/b7a7e08ac52faeeedd4200881f2a9c80b13a651a))
+
 * Add diagrams to README and update footer
 
 - Included three new diagrams: DeckBot Architecture, Vibe Coding Loop, and Exploded View of Slide Code to enhance visual understanding of the project.
@@ -278,8 +353,3 @@ Technical details:
 - Updated SessionService to accept aspect_ratio and resolution parameters ([`f41eb44`](https://github.com/AnthusAI/DeckBot/commit/f41eb445a1b8004ab8eafe6258c5abb517e5618b))
 
 * Initial commit ([`b5309ae`](https://github.com/AnthusAI/DeckBot/commit/b5309ae392e7d8dad88bd42fedee4f2e65d7a443))
-
-
-
-
-
